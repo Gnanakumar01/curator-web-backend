@@ -10,15 +10,23 @@ router.post("/create", async (req, res) => {
 
   try {
 
+    // Validate required fields
+    const { storeName, storeAddressLine, storeLocality, storePincode, storeCity, storeState } = req.body;
+    
+    if (!storeName || !storeAddressLine || !storePincode || !storeCity) {
+      return res.status(400).json({ message: "Please provide store name, address, pincode, and city" });
+    }
+
     const store = new Store(req.body);
 
     await store.save();
 
-    res.json(store);
+    res.status(201).json(store);
 
   } catch (error) {
 
-    res.status(500).json(error);
+    console.error("Store creation error:", error);
+    res.status(500).json({ message: "Failed to store please try again", error: error.message });
 
   }
 

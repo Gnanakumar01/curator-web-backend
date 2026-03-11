@@ -12,17 +12,10 @@ router.post("/create", async (req, res) => {
 
     const savedRequirement = await requirement.save();
 
-    res.status(201).json({
-      success: true,
-      data: savedRequirement
-    });
+    res.status(201).json(savedRequirement);
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error creating requirement",
-      error: error.message
-    });
+    res.status(500).json(error);
   }
 });
 
@@ -35,17 +28,10 @@ router.get("/", async (req, res) => {
 
     const requirements = await Requirement.find({ isDeleted: false });
 
-    res.json({
-      success: true,
-      data: requirements
-    });
+    res.json(requirements);
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error fetching requirements",
-      error: error.message
-    });
+    res.status(500).json(error);
   }
 });
 
@@ -62,23 +48,13 @@ router.get("/:id", async (req, res) => {
     });
 
     if (!requirement) {
-      return res.status(404).json({
-        success: false,
-        message: "Requirement not found"
-      });
+      return res.status(404).json({ message: "Requirement not found" });
     }
 
-    res.json({
-      success: true,
-      data: requirement
-    });
+    res.json(requirement);
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error fetching requirement",
-      error: error.message
-    });
+    res.status(500).json(error);
   }
 });
 
@@ -96,23 +72,13 @@ router.put("/:id", async (req, res) => {
     );
 
     if (!requirement) {
-      return res.status(404).json({
-        success: false,
-        message: "Requirement not found"
-      });
+      return res.status(404).json({ message: "Requirement not found" });
     }
 
-    res.json({
-      success: true,
-      data: requirement
-    });
+    res.json(requirement);
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error updating requirement",
-      error: error.message
-    });
+    res.status(500).json(error);
   }
 });
 
@@ -130,23 +96,13 @@ router.delete("/:id", async (req, res) => {
     );
 
     if (!requirement) {
-      return res.status(404).json({
-        success: false,
-        message: "Requirement not found"
-      });
+      return res.status(404).json({ message: "Requirement not found" });
     }
 
-    res.json({
-      success: true,
-      message: "Requirement deleted successfully"
-    });
+    res.json({ message: "Requirement deleted successfully" });
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error deleting requirement",
-      error: error.message
-    });
+    res.status(500).json(error);
   }
 });
 

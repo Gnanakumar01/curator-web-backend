@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const responseSchema = new mongoose.Schema({
 
-  reqId: {
+  resId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Requirement"
   },
