@@ -10,11 +10,24 @@ const storeSchema = new mongoose.Schema({
   storeState: String,
 
   storeGmapUrl: String,
-  storeRatings: Number,
+  storeRatings: {
+    type: Number,
+    default: 0
+  },
+  storeKm: {
+    type: String,
+    default: ""
+  },
   storeCategory: String,
 
   storeContact: String,
   storeEmail: String,
+
+  // Store image field
+  storeImage: {
+    type: String,
+    default: ""
+  },
 
   storeOwner: {
     type: mongoose.Schema.Types.ObjectId,
