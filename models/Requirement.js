@@ -28,7 +28,14 @@ const requirementSchema = new mongoose.Schema({
   isDeleted: {
     type: Boolean,
     default: false
-  }
+  },
+  
+  favResponses: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Response"
+    }
+  ]
 
 }, { timestamps: true });
 
