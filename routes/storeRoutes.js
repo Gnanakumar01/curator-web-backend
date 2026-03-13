@@ -40,24 +40,15 @@ router.post("/create", async (req, res) => {
 
     console.log("Processed store data:", JSON.stringify(finalStoreData));
 
-    // Make validation optional - accept store even without required fields
-    // if (!finalStoreData.storeName) {
-    //   console.log("Validation error: storeName is missing");
-    //   return res.status(400).json({ message: "Please provide store name" });
-    // }
-
-    // if (!finalStoreData.storeCity) {
-    //   console.log("Validation error: storeCity is missing");
-    //   return res.status(400).json({ message: "Please provide city" });
-    // }
-
+    console.log("Final store data to save:", finalStoreData);
+    
     const store = new Store(finalStoreData);
     console.log("Store object created, attempting to save...");
 
-    await store.save();
-
-    console.log("Store created successfully:", store._id);
-    res.status(201).json(store);
+    const savedStore = await store.save();
+    
+    console.log("Store created successfully:", savedStore._id);
+    res.status(201).json({ message: "Store created successfully", store: savedStore });
 
   } catch (error) {
 
@@ -116,29 +107,19 @@ router.post("/", async (req, res) => {
     };
 
     console.log("Processed store data (root):", JSON.stringify(finalStoreData));
-
-    // Make validation optional - accept store even without required fields
-    // if (!finalStoreData.storeName) {
-    //   console.log("Validation error: storeName is missing");
-    //   return res.status(400).json({ message: "Please provide store name" });
-    // }
-
-    // if (!finalStoreData.storeCity) {
-    //   console.log("Validation error: storeCity is missing");
-    //   return res.status(400).json({ message: "Please provide city" });
-    // }
-
+    console.log("Final store data to save (root):", finalStoreData);
+    
     const store = new Store(finalStoreData);
-    console.log("Store object created, attempting to save...");
+    console.log("Store object created, attempting to save (root)...");
 
-    await store.save();
-
-    console.log("Store created successfully:", store._id);
-    res.status(201).json(store);
+    const savedStore = await store.save();
+    
+    console.log("Store created successfully (root):", savedStore._id);
+    res.status(201).json({ message: "Store created successfully", store: savedStore });
 
   } catch (error) {
 
-    console.error("Store creation error details:", error);
+    console.error("Store creation error details (root):", error);
     console.error("Error name:", error.name);
     console.error("Error message:", error.message);
     console.error("Error code:", error.code);

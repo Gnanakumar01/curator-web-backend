@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const responseSchema = new mongoose.Schema({
 
-  resId: {
+  requirementId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Requirement"
   },
@@ -10,6 +10,23 @@ const responseSchema = new mongoose.Schema({
   storeId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Store"
+  },
+
+  // Quotation details from frontend
+  price: Number,
+  deliveryTime: Number,
+  deliveryTimeUnit: String,
+  distance: Number,
+  message: String,
+  status: {
+    type: String,
+    default: 'Pending'
+  },
+
+  // Legacy fields
+  resId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Requirement"
   },
 
   responseStat: {

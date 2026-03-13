@@ -31,7 +31,8 @@ const storeSchema = new mongoose.Schema({
 
   storeOwner: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User"
+    ref: "User",
+    default: null
   },
 
   isDeleted: {
