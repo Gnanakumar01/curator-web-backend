@@ -25,28 +25,28 @@ dotenv
 curator-backend
 │
 ├── config
-│   └── db.js
-│
+│ └── db.js
+
 ├── controllers
-│   ├── authControllers.js
-│   ├── requirementControllers.js
-│   └── storeController.js
-│
+│ ├── authControllers.js
+│ ├── requirementControllers.js
+│ └── storeController.js
+
 ├── models
-│   ├── User.js
-│   ├── Store.js
-│   ├── Category.js
-│   ├── Requirement.js
-│   └── Response.js
-│
+│ ├── User.js
+│ ├── Store.js
+│ ├── Category.js
+│ ├── Requirement.js
+│ └── Response.js
+
 ├── routes
-│   ├── authRoutes.js
-│   ├── userRoutes.js
-│   ├── storeRoutes.js
-│   ├── categoryRoutes.js
-│   ├── requirementRoutes.js
-│   └── responseRoutes.js
-│
+│ ├── authRoutes.js
+│ ├── userRoutes.js
+│ ├── storeRoutes.js
+│ ├── categoryRoutes.js
+│ ├── requirementRoutes.js
+│ └── responseRoutes.js
+
 ├── .env
 ├── server.js
 └── package.json
