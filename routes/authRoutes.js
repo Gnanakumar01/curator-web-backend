@@ -1,9 +1,28 @@
 const express = require("express");
 const router = express.Router();
+const admin = require("../config/firebase");
 
-const { register, login } = require("../controllers/authController");
+router.post("/google-login", async (req, res) => {
 
-router.post("/register", register);
-router.post("/login", login);
+  try {
+
+    const { token } = req.body;
+
+    const decodedToken = await admin.auth().verifyIdToken(token);
+
+    res.json({
+      message: "Google login successful",
+      user: decodedToken
+    });
+
+  } catch (error) {
+
+    res.status(401).json({
+      message: "Invalid token"
+    });
+
+  }
+
+});
 
 module.exports = router;
