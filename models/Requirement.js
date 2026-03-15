@@ -22,7 +22,8 @@ const requirementSchema = new mongoose.Schema({
 
   reqOwner: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User"
+    ref: "User",
+    default: null
   },
 
   isDeleted: {

@@ -7,7 +7,8 @@ CREATE REQUIREMENT
 */
 router.post("/create", async (req, res) => {
   try {
-
+    console.log("Received requirement data:", req.body);
+    
     const requirement = new Requirement(req.body);
 
     const savedRequirement = await requirement.save();
@@ -15,7 +16,8 @@ router.post("/create", async (req, res) => {
     res.status(201).json(savedRequirement);
 
   } catch (error) {
-    res.status(500).json(error);
+    console.error("Error creating requirement:", error);
+    res.status(500).json({ message: error.message });
   }
 });
 
