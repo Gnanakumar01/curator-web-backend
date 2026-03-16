@@ -9,7 +9,13 @@ router.post("/create", async (req, res) => {
   try {
     console.log("Received requirement data:", req.body);
     
-    const requirement = new Requirement(req.body);
+    // Handle empty string for reqOwner - convert to null or undefined
+    const requirementData = { ...req.body };
+    if (requirementData.reqOwner === "" || requirementData.reqOwner === null) {
+      delete requirementData.reqOwner; // Let it use the default value (null)
+    }
+    
+    const requirement = new Requirement(requirementData);
 
     const savedRequirement = await requirement.save();
 
@@ -66,10 +72,15 @@ UPDATE REQUIREMENT
 */
 router.put("/:id", async (req, res) => {
   try {
+    // Handle empty string for reqOwner - convert to null or undefined
+    const updateData = { ...req.body };
+    if (updateData.reqOwner === "" || updateData.reqOwner === null) {
+      delete updateData.reqOwner; // Keep existing value or use default
+    }
 
     const requirement = await Requirement.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true }
     );
 
