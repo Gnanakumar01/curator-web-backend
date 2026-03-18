@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema({
   locality: String,
   userType: {
     type: String,
-    enum: ["customer", "storeOwner"],
+    enum: ["customer", "store_owner"],
     default: "customer"
   },
   isDeleted: {
