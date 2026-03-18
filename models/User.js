@@ -6,10 +6,14 @@ const userSchema = new mongoose.Schema({
   email: String,
   phone: String,
   locality: String,
-  password: String,
+  userType: {
+    type: String,
+    enum: ["customer", "storeOwner"],
+    default: "customer"
+  },
   isDeleted: {
-  type: Boolean,
-  default: false
+    type: Boolean,
+    default: false
   },
   createdAt: {
     type: Date,

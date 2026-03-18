@@ -20,17 +20,27 @@ const requirementSchema = new mongoose.Schema({
 
   expectedBudget: Number,
 
-  reqOwner: {
+  // ✅ ADD THIS
+  createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    default: null
+    required: true
   },
+
+  // ✅ ADD THIS
+  userType: {
+    type: String,
+    enum: ["customer", "store_owner"],
+    required: true
+  },
+
+  reqOwner: String, // change from ObjectId → string (you are passing name)
 
   isDeleted: {
     type: Boolean,
     default: false
   },
-  
+
   favResponses: [
     {
       type: mongoose.Schema.Types.ObjectId,
