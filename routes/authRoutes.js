@@ -5,10 +5,9 @@ const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 
 router.post("/google-login", async (req, res) => {
-  console.log("🔍 Request body:", req.body);        // ← add this
+  console.log("🔍 Request body:", req.body);
   console.log("🔍 JWT_SECRET:", process.env.JWT_SECRET);
   try {
-    // ✅ FIXED: Read 'idToken' (frontend sends idToken, not token)
     const { idToken } = req.body;
 
     if (!idToken) {
@@ -18,22 +17,19 @@ router.post("/google-login", async (req, res) => {
       });
     }
 
-    // ✅ Verify Firebase ID Token
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     const { email, name } = decodedToken;
 
-    // ✅ Find or create user in MongoDB
     let user = await User.findOne({ email });
 
     if (!user) {
       user = await User.create({
         firstName: name || "User",
         email,
-        userType: "customer" // default
+        userType: "customer"
       });
     }
 
-    // ✅ Sign JWT with secret from .env
     const jwtToken = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
@@ -43,7 +39,12 @@ router.post("/google-login", async (req, res) => {
     res.json({
       success: true,
       token: jwtToken,
-      user
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        email: user.email,
+        userType: user.userType
+      }
     });
 
   } catch (error) {
