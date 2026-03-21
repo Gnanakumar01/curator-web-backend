@@ -4,7 +4,7 @@ const requirementSchema = new mongoose.Schema({
 
   reqCategory: String,
   reqTitle: String,
-  reqDocs: String,
+  reqDocs: [String],
   reqDesc: String,
   reqAudio: String,
 
