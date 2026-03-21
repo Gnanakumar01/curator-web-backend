@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const admin = require("../config/firebase");
 const User = require("../models/User");
+const Store = require("../models/Store");
 const jwt = require("jsonwebtoken");
 
 router.post("/google-login", async (req, res) => {
@@ -36,14 +37,21 @@ router.post("/google-login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
+    const store = await Store.findOne({ storeOwner: user._id, isDeleted: false });
+
     res.json({
       success: true,
       token: jwtToken,
       user: {
         _id: user._id,
         firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
-        userType: user.userType
+        phone: user.phone,
+        locality: user.locality,
+        userType: user.userType,
+        isProfileComplete: user.isProfileComplete,
+        hasStore: !!store
       }
     });
 

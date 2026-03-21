@@ -9,9 +9,20 @@ router.post("/create", async (req, res) => {
 
   try {
 
-    const user = new User(req.body);
-
-    await user.save();
+    const { userId, ...userData } = req.body;
+    
+    let user;
+    
+    if (userId) {
+      user = await User.findByIdAndUpdate(
+        userId,
+        { ...userData, isProfileComplete: true },
+        { new: true }
+      );
+    } else {
+      user = new User({ ...userData, isProfileComplete: true });
+      await user.save();
+    }
 
     res.json(user);
 
