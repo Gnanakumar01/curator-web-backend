@@ -9,7 +9,7 @@ admin.initializeApp({
 
 // 🔥 ADD THIS (VERY IMPORTANT DEBUG)
 admin.auth().listUsers(1)
-  .then(() => console.log("🔥 Firebase Admin Connected"))
+  .then(() => console.log("Firebase Admin Connected"))
   .catch(err => console.error("❌ Firebase Admin Error:", err));
 
 module.exports = admin;
