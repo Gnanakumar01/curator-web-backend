@@ -21,4 +21,24 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.get("/requirement/:requirementId", async (req, res) => {
+  try {
+    const data = await Response.find({ requirementId: req.params.requirementId })
+      .populate("storeId", "storeName logo rating totalReviews address isVerified");
+    res.json(data);
+  } catch (error) {
+    res.status(500).json(error);
+  }
+});
+
+router.get("/:id", async (req, res) => {
+  try {
+    const data = await Response.findById(req.params.id)
+      .populate("storeId", "storeName logo rating totalReviews address isVerified");
+    res.json(data);
+  } catch (error) {
+    res.status(500).json(error);
+  }
+});
+
 module.exports = router;

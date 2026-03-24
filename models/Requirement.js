@@ -4,7 +4,11 @@ const requirementSchema = new mongoose.Schema({
 
   reqCategory: String,
   reqTitle: String,
-  reqDocs: [String],
+  reqDocs: [{
+    fileName: String,
+    fileType: String,
+    data: String // Base64 encoded file data
+  }],
   reqDesc: String,
   reqAudio: String,
 
