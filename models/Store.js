@@ -10,6 +10,14 @@ const storeSchema = new mongoose.Schema({
   storeState: String,
 
   storeGmapUrl: String,
+  latitude: {
+    type: Number,
+    default: null
+  },
+  longitude: {
+    type: Number,
+    default: null
+  },
   storeRatings: {
     type: Number,
     default: 0

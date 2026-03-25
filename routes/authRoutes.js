@@ -19,7 +19,7 @@ router.post("/google-login", async (req, res) => {
     }
 
     const decodedToken = await admin.auth().verifyIdToken(idToken);
-    const { email, name } = decodedToken;
+    const { email, name, picture } = decodedToken;
 
     let user = await User.findOne({ email });
 
@@ -27,8 +27,15 @@ router.post("/google-login", async (req, res) => {
       user = await User.create({
         firstName: name || "User",
         email,
+        profileImage: picture || "",
         userType: "customer"
       });
+    } else {
+      // Update profile image if user exists but doesn't have one and Google has one
+      if (!user.profileImage && picture) {
+        user.profileImage = picture;
+        await user.save();
+      }
     }
 
     const jwtToken = jwt.sign(
@@ -49,6 +56,7 @@ router.post("/google-login", async (req, res) => {
         email: user.email,
         phone: user.phone,
         locality: user.locality,
+        profileImage: user.profileImage,
         userType: user.userType,
         isProfileComplete: user.isProfileComplete,
         hasStore: !!store

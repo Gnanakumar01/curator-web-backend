@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
   email: String,
   phone: String,
   locality: String,
+  profileImage: String,
   userType: {
     type: String,
     enum: ["customer", "store_owner"],

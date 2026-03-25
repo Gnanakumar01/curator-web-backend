@@ -2,6 +2,38 @@ const express = require("express");
 const router = express.Router();
 const Store = require("../models/Store");
 
+// Helper function to extract coordinates from Google Maps URL
+const extractCoordinates = (gmapUrl) => {
+  if (!gmapUrl) return { latitude: null, longitude: null };
+  
+  // Try to extract from @latitude,longitude format
+  const latLngMatch = gmapUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (latLngMatch) {
+    return {
+      latitude: parseFloat(latLngMatch[1]),
+      longitude: parseFloat(latLngMatch[2])
+    };
+  }
+  
+  // Try to extract from ?query=latitude,longitude format
+  const queryMatch = gmapUrl.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/i);
+  if (queryMatch) {
+    return {
+      latitude: parseFloat(queryMatch[1]),
+      longitude: parseFloat(queryMatch[2])
+    };
+  }
+  
+  // Try to extract from /maps/search format
+  const searchMatch = gmapUrl.match(/maps\/search\/([^/]+)/);
+  if (searchMatch) {
+    // This is a search URL, can't extract coordinates reliably
+    return { latitude: null, longitude: null };
+  }
+  
+  return { latitude: null, longitude: null };
+};
+
 
 /*
 CREATE STORE
@@ -10,131 +42,140 @@ router.post("/create", async (req, res) => {
 
   try {
 
-    // Log the incoming data for debugging
     console.log("Store creation request body:", JSON.stringify(req.body));
 
-    // Check if body is empty
     if (!req.body || Object.keys(req.body).length === 0) {
       console.log("Error: Request body is empty");
       return res.status(400).json({ message: "No data provided. Please fill the form and submit." });
     }
 
-    // Extract fields with flexible naming
     const { _id, ...storeData } = req.body;
+
+    // Extract coordinates: first check if provided directly, otherwise try to extract from URL
+    let latitude = null;
+    let longitude = null;
     
+    if (storeData.latitude && storeData.longitude) {
+      latitude = parseFloat(storeData.latitude);
+      longitude = parseFloat(storeData.longitude);
+    } else {
+      const extracted = extractCoordinates(storeData.storeGmapUrl || storeData.gmapUrl || storeData.googleMapUrl);
+      latitude = extracted.latitude;
+      longitude = extracted.longitude;
+    }
+
     const finalStoreData = {
-      storeName: storeData.storeName || storeData.name || storeData.store_name,
+      storeName:        storeData.storeName || storeData.name || storeData.store_name,
       storeAddressLine: storeData.storeAddressLine || storeData.address || storeData.addressLine,
-      storeLocality: storeData.storeLocality || storeData.locality || storeData.area,
-      storePincode: storeData.storePincode || storeData.pincode || storeData.pinCode,
-      storeCity: storeData.storeCity || storeData.city,
-      storeState: storeData.storeState || storeData.state,
-      storeGmapUrl: storeData.storeGmapUrl || storeData.gmapUrl || storeData.googleMapUrl,
-      storeRatings: storeData.storeRatings || storeData.ratings || storeData.rating || 0,
-      storeKm: storeData.storeKm || storeData.km || storeData.distance || storeData.store_distance || "",
-      storeCategory: storeData.storeCategory || storeData.category,
-      storeContact: storeData.storeContact || storeData.contact || storeData.phone,
-      storeEmail: storeData.storeEmail || storeData.email,
-      storeImage: storeData.storeImage || storeData.image || storeData.store_image || storeData.imageUrl || storeData.imageUrl
+      storeLocality:    storeData.storeLocality || storeData.locality || storeData.area,
+      storePincode:     storeData.storePincode || storeData.pincode || storeData.pinCode,
+      storeCity:        storeData.storeCity || storeData.city,
+      storeState:       storeData.storeState || storeData.state,
+      storeGmapUrl:     storeData.storeGmapUrl || storeData.gmapUrl || storeData.googleMapUrl,
+      latitude:         latitude,
+      longitude:        longitude,
+      storeRatings:     storeData.storeRatings || storeData.ratings || storeData.rating || 0,
+      storeKm:          storeData.storeKm || storeData.km || storeData.distance || storeData.store_distance || "",
+      storeCategory:    storeData.storeCategory || storeData.category,
+      storeContact:     storeData.storeContact || storeData.contact || storeData.phone,
+      storeEmail:       storeData.storeEmail || storeData.email,
+      storeImage:       storeData.storeImage || storeData.image || storeData.store_image || storeData.imageUrl,
+      storeOwner:       storeData.storeOwner || storeData.ownerId || null
     };
 
-    console.log("Processed store data:", JSON.stringify(finalStoreData));
-
     console.log("Final store data to save:", finalStoreData);
-    
-    const store = new Store(finalStoreData);
-    console.log("Store object created, attempting to save...");
 
+    const store = new Store(finalStoreData);
     const savedStore = await store.save();
-    
+
     console.log("Store created successfully:", savedStore._id);
     res.status(201).json({ message: "Store created successfully", store: savedStore });
 
   } catch (error) {
 
     console.error("Store creation error details:", error);
-    console.error("Error name:", error.name);
-    console.error("Error message:", error.message);
-    console.error("Error code:", error.code);
-    
-    // Handle duplicate key error (E11000)
+
     if (error.code === 11000) {
       return res.status(400).json({ message: "A store with this information already exists" });
     }
-    
-    // Handle validation errors
-    if (error.name === 'ValidationError') {
+
+    if (error.name === "ValidationError") {
       return res.status(400).json({ message: "Validation error", errors: error.errors });
     }
 
-    res.status(500).json({ message: "Failed to store please try again", error: error.message });
+    res.status(500).json({ message: "Failed to create store, please try again", error: error.message });
 
   }
 
 });
 
-// Also support POST to root /stores (for direct form submissions)
+
+// Also support POST to root /stores
 router.post("/", async (req, res) => {
 
   try {
 
-    // Log the incoming data for debugging
     console.log("Store creation request body (root):", JSON.stringify(req.body));
 
-    // Check if body is empty
     if (!req.body || Object.keys(req.body).length === 0) {
-      console.log("Error: Request body is empty (root)");
       return res.status(400).json({ message: "No data provided. Please fill the form and submit." });
     }
 
-    // Extract fields with flexible naming
     const { _id, ...storeData } = req.body;
+
+    // Extract coordinates: first check if provided directly, otherwise try to extract from URL
+    let latitude = null;
+    let longitude = null;
     
+    if (storeData.latitude && storeData.longitude) {
+      latitude = parseFloat(storeData.latitude);
+      longitude = parseFloat(storeData.longitude);
+    } else {
+      const extracted = extractCoordinates(storeData.storeGmapUrl || storeData.gmapUrl || storeData.googleMapUrl);
+      latitude = extracted.latitude;
+      longitude = extracted.longitude;
+    }
+
     const finalStoreData = {
-      storeName: storeData.storeName || storeData.name || storeData.store_name,
+      storeName:        storeData.storeName || storeData.name || storeData.store_name,
       storeAddressLine: storeData.storeAddressLine || storeData.address || storeData.addressLine,
-      storeLocality: storeData.storeLocality || storeData.locality || storeData.area,
-      storePincode: storeData.storePincode || storeData.pincode || storeData.pinCode,
-      storeCity: storeData.storeCity || storeData.city,
-      storeState: storeData.storeState || storeData.state,
-      storeGmapUrl: storeData.storeGmapUrl || storeData.gmapUrl || storeData.googleMapUrl,
-      storeRatings: storeData.storeRatings || storeData.ratings || storeData.rating || 0,
-      storeKm: storeData.storeKm || storeData.km || storeData.distance || storeData.store_distance || "",
-      storeCategory: storeData.storeCategory || storeData.category,
-      storeContact: storeData.storeContact || storeData.contact || storeData.phone,
-      storeEmail: storeData.storeEmail || storeData.email,
-      storeImage: storeData.storeImage || storeData.image || storeData.store_image || storeData.imageUrl || storeData.imageUrl
+      storeLocality:    storeData.storeLocality || storeData.locality || storeData.area,
+      storePincode:     storeData.storePincode || storeData.pincode || storeData.pinCode,
+      storeCity:        storeData.storeCity || storeData.city,
+      storeState:       storeData.storeState || storeData.state,
+      storeGmapUrl:     storeData.storeGmapUrl || storeData.gmapUrl || storeData.googleMapUrl,
+      latitude:         latitude,
+      longitude:        longitude,
+      storeRatings:     storeData.storeRatings || storeData.ratings || storeData.rating || 0,
+      storeKm:          storeData.storeKm || storeData.km || storeData.distance || storeData.store_distance || "",
+      storeCategory:    storeData.storeCategory || storeData.category,
+      storeContact:     storeData.storeContact || storeData.contact || storeData.phone,
+      storeEmail:       storeData.storeEmail || storeData.email,
+      storeImage:       storeData.storeImage || storeData.image || storeData.store_image || storeData.imageUrl,
+      storeOwner:       storeData.storeOwner || storeData.ownerId || null
     };
 
-    console.log("Processed store data (root):", JSON.stringify(finalStoreData));
     console.log("Final store data to save (root):", finalStoreData);
-    
-    const store = new Store(finalStoreData);
-    console.log("Store object created, attempting to save (root)...");
 
+    const store = new Store(finalStoreData);
     const savedStore = await store.save();
-    
+
     console.log("Store created successfully (root):", savedStore._id);
     res.status(201).json({ message: "Store created successfully", store: savedStore });
 
   } catch (error) {
 
     console.error("Store creation error details (root):", error);
-    console.error("Error name:", error.name);
-    console.error("Error message:", error.message);
-    console.error("Error code:", error.code);
-    
-    // Handle duplicate key error (E11000)
+
     if (error.code === 11000) {
       return res.status(400).json({ message: "A store with this information already exists" });
     }
-    
-    // Handle validation errors
-    if (error.name === 'ValidationError') {
+
+    if (error.name === "ValidationError") {
       return res.status(400).json({ message: "Validation error", errors: error.errors });
     }
 
-    res.status(500).json({ message: "Failed to store please try again", error: error.message });
+    res.status(500).json({ message: "Failed to create store, please try again", error: error.message });
 
   }
 
@@ -148,7 +189,9 @@ router.get("/", async (req, res) => {
 
   try {
 
-    const stores = await Store.find({ $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }] });
+    const stores = await Store.find({
+      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }]
+    });
 
     console.log("Found stores count:", stores.length);
     res.json(stores);
@@ -164,14 +207,63 @@ router.get("/", async (req, res) => {
 
 
 /*
+GET STORES BY OWNER
+⚠️  MUST be defined BEFORE "/:id"
+    Express matches routes top-to-bottom. If /:id comes first,
+    a request to /owner/abc123 is treated as /:id = "owner"
+    and this route is NEVER reached.
+*/
+router.get("/owner/:ownerId", async (req, res) => {
+
+  try {
+
+    const { ownerId } = req.params;
+    console.log("Getting stores for owner ID:", ownerId);
+
+    // Direct query — works when storeOwner is stored as ObjectId
+    let stores = await Store.find({
+      storeOwner: ownerId,
+      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }]
+    });
+
+    console.log("Found stores with direct match:", stores.length);
+
+    // Fallback: handles edge case where storeOwner was saved as a plain
+    // string instead of ObjectId (common in older/seeded data)
+    if (stores.length === 0) {
+      const allStores = await Store.find({
+        $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }]
+      });
+
+      console.log("Total stores in DB:", allStores.length);
+
+      stores = allStores.filter(s => s.storeOwner?.toString() === ownerId);
+
+      console.log("Found stores after fallback filter:", stores.length);
+    }
+
+    res.json(stores);
+
+  } catch (error) {
+
+    console.error("Get stores by owner error:", error);
+    res.status(500).json({ message: error.message });
+
+  }
+
+});
+
+
+/*
 GET STORE BY ID
+⚠️  MUST be defined AFTER all specific named GET routes
+    because /:id is a wildcard — it matches ANY single path segment
 */
 router.get("/:id", async (req, res) => {
 
   try {
 
     const store = await Store.findById(req.params.id);
-
     res.json(store);
 
   } catch (error) {
@@ -193,7 +285,7 @@ router.put("/:id", async (req, res) => {
     const store = await Store.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new:true }
+      { new: true }
     );
 
     res.json(store);
@@ -216,10 +308,10 @@ router.delete("/:id", async (req, res) => {
 
     await Store.findByIdAndUpdate(
       req.params.id,
-      { isDeleted:true }
+      { isDeleted: true }
     );
 
-    res.json({ message:"Store deleted" });
+    res.json({ message: "Store deleted" });
 
   } catch (error) {
 
