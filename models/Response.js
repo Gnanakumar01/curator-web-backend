@@ -18,6 +18,11 @@ const responseSchema = new mongoose.Schema({
   deliveryTimeUnit: String,
   distance: Number,
   message: String,
+  attachments: [{
+    fileName: String,
+    fileType: String,
+    data: String // Base64 encoded file data
+  }],
   status: {
     type: String,
     default: 'Pending'

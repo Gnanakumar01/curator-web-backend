@@ -24,7 +24,7 @@ router.get("/", async (req, res) => {
 router.get("/requirement/:requirementId", async (req, res) => {
   try {
     const data = await Response.find({ requirementId: req.params.requirementId })
-      .populate("storeId", "storeName logo rating totalReviews address isVerified");
+      .populate("storeId", "storeName storeImage storeRatings storeAddressLine storeLocality storeCity storeOwner");
     res.json(data);
   } catch (error) {
     res.status(500).json(error);
@@ -34,7 +34,7 @@ router.get("/requirement/:requirementId", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const data = await Response.findById(req.params.id)
-      .populate("storeId", "storeName logo rating totalReviews address isVerified");
+      .populate("storeId", "storeName storeImage storeRatings storeAddressLine storeLocality storeCity");
     res.json(data);
   } catch (error) {
     res.status(500).json(error);
