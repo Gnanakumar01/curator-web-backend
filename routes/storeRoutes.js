@@ -80,6 +80,8 @@ router.post("/create", async (req, res) => {
       storeContact:     storeData.storeContact || storeData.contact || storeData.phone,
       storeEmail:       storeData.storeEmail || storeData.email,
       storeImage:       storeData.storeImage || storeData.image || storeData.store_image || storeData.imageUrl,
+      storeImages:      storeData.storeImages || [],
+      storeAttachedFiles: storeData.storeAttachedFiles || [],
       storeOwner:       storeData.storeOwner || storeData.ownerId || null
     };
 
@@ -152,6 +154,8 @@ router.post("/", async (req, res) => {
       storeContact:     storeData.storeContact || storeData.contact || storeData.phone,
       storeEmail:       storeData.storeEmail || storeData.email,
       storeImage:       storeData.storeImage || storeData.image || storeData.store_image || storeData.imageUrl,
+      storeImages:      storeData.storeImages || [],
+      storeAttachedFiles: storeData.storeAttachedFiles || [],
       storeOwner:       storeData.storeOwner || storeData.ownerId || null
     };
 

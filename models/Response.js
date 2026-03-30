@@ -27,6 +27,12 @@ const responseSchema = new mongoose.Schema({
     type: String,
     default: 'Pending'
   },
+  acceptMessage: {
+    type: String
+  },
+  acceptedAt: {
+    type: Date
+  },
 
   // Legacy fields
   resId: {

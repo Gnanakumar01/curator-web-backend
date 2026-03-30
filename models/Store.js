@@ -37,6 +37,12 @@ const storeSchema = new mongoose.Schema({
     default: ""
   },
 
+  // Attached files field
+  storeAttachedFiles: {
+    type: [String],
+    default: []
+  },
+
   storeOwner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
