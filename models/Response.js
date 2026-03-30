@@ -56,6 +56,35 @@ const responseSchema = new mongoose.Schema({
   isDeleted: {
     type: Boolean,
     default: false
+  },
+
+  // Notification fields for store owner
+  notificationForStoreOwner: {
+    type: Boolean,
+    default: false
+  },
+  notificationTitle: {
+    type: String
+  },
+  notificationMessage: {
+    type: String
+  },
+  notificationType: {
+    type: String,
+    enum: ['quotation_accepted', 'quotation', 'system', null],
+    default: null
+  },
+  isNotificationRead: {
+    type: Boolean,
+    default: false
+  },
+  notificationRecipientId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  notificationSenderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }
 
 }, { timestamps: true });

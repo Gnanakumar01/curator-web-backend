@@ -39,6 +39,7 @@ app.use("/api/stores", require("./routes/storeRoutes"));
 // app.use("/api/categories", require("./routes/categoryRoutes"));
 app.use("/api/requirements", require("./routes/requirementRoutes"));
 app.use("/api/responses", require("./routes/responseRoutes"));
+app.use("/api/notifications", require("./routes/notificationRoutes"));
 
 const PORT = process.env.PORT || 5000;
 
