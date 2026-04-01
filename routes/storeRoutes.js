@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Store = require("../models/Store");
+const { geocodeAddress, buildFullAddress } = require("../utils/geocoding");
 
 // Helper function to extract coordinates from Google Maps URL
 const extractCoordinates = (gmapUrl) => {
@@ -51,7 +52,7 @@ router.post("/create", async (req, res) => {
 
     const { _id, ...storeData } = req.body;
 
-    // Extract coordinates: first check if provided directly, otherwise try to extract from URL
+    // Extract coordinates: first check if provided directly, otherwise try to extract from URL, then use Nominatim as fallback
     let latitude = null;
     let longitude = null;
     
@@ -62,6 +63,27 @@ router.post("/create", async (req, res) => {
       const extracted = extractCoordinates(storeData.storeGmapUrl || storeData.gmapUrl || storeData.googleMapUrl);
       latitude = extracted.latitude;
       longitude = extracted.longitude;
+    }
+    
+    // If still no coordinates, try Nominatim geocoding as fallback
+    if (!latitude || !longitude) {
+      const tempStoreData = {
+        storeAddressLine: storeData.storeAddressLine || storeData.address || storeData.addressLine,
+        storeLocality: storeData.storeLocality || storeData.locality || storeData.area,
+        storeCity: storeData.storeCity || storeData.city,
+        storeState: storeData.storeState || storeData.state,
+        storePincode: storeData.storePincode || storeData.pincode || storeData.pinCode
+      };
+      const fullAddress = buildFullAddress(tempStoreData);
+      if (fullAddress) {
+        console.log("Attempting Nominatim geocoding for address:", fullAddress);
+        const geocoded = await geocodeAddress(fullAddress);
+        if (geocoded.latitude && geocoded.longitude) {
+          latitude = geocoded.latitude;
+          longitude = geocoded.longitude;
+          console.log("Nominatim geocoding successful:", latitude, longitude);
+        }
+      }
     }
 
     const finalStoreData = {
@@ -125,7 +147,7 @@ router.post("/", async (req, res) => {
 
     const { _id, ...storeData } = req.body;
 
-    // Extract coordinates: first check if provided directly, otherwise try to extract from URL
+    // Extract coordinates: first check if provided directly, otherwise try to extract from URL, then use Nominatim as fallback
     let latitude = null;
     let longitude = null;
     
@@ -136,6 +158,27 @@ router.post("/", async (req, res) => {
       const extracted = extractCoordinates(storeData.storeGmapUrl || storeData.gmapUrl || storeData.googleMapUrl);
       latitude = extracted.latitude;
       longitude = extracted.longitude;
+    }
+    
+    // If still no coordinates, try Nominatim geocoding as fallback
+    if (!latitude || !longitude) {
+      const tempStoreData = {
+        storeAddressLine: storeData.storeAddressLine || storeData.address || storeData.addressLine,
+        storeLocality: storeData.storeLocality || storeData.locality || storeData.area,
+        storeCity: storeData.storeCity || storeData.city,
+        storeState: storeData.storeState || storeData.state,
+        storePincode: storeData.storePincode || storeData.pincode || storeData.pinCode
+      };
+      const fullAddress = buildFullAddress(tempStoreData);
+      if (fullAddress) {
+        console.log("Attempting Nominatim geocoding for address:", fullAddress);
+        const geocoded = await geocodeAddress(fullAddress);
+        if (geocoded.latitude && geocoded.longitude) {
+          latitude = geocoded.latitude;
+          longitude = geocoded.longitude;
+          console.log("Nominatim geocoding successful:", latitude, longitude);
+        }
+      }
     }
 
     const finalStoreData = {

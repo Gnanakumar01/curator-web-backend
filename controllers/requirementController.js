@@ -16,7 +16,8 @@ exports.createRequirement = async (req, res) => {
       expectedBudget,
       reqOwner,
       userType,
-      createdBy
+      createdBy,
+      reqAudio
     } = req.body;
 
     // ✅ Basic validation
@@ -37,7 +38,8 @@ exports.createRequirement = async (req, res) => {
       expectedBudget,
       reqOwner,
       userType,
-      createdBy
+      createdBy,
+      reqAudio
     });
 
     await newRequirement.save();

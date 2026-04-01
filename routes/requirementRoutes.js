@@ -14,6 +14,12 @@ router.post("/create", async (req, res) => {
       delete requirementData.reqOwner;
     }
     
+    // Map audioRecording to reqAudio if present
+    if (requirementData.audioRecording) {
+      requirementData.reqAudio = requirementData.audioRecording;
+      delete requirementData.audioRecording;
+    }
+    
     const requirement = new Requirement(requirementData);
     const savedRequirement = await requirement.save();
 
@@ -92,6 +98,12 @@ router.put("/:id", async (req, res) => {
     const updateData = { ...req.body };
     if (updateData.reqOwner === "" || updateData.reqOwner === null) {
       delete updateData.reqOwner;
+    }
+    
+    // Map audioRecording to reqAudio if present
+    if (updateData.audioRecording) {
+      updateData.reqAudio = updateData.audioRecording;
+      delete updateData.audioRecording;
     }
 
     const requirement = await Requirement.findByIdAndUpdate(
