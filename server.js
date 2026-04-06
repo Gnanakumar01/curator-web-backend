@@ -4,6 +4,8 @@ const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const path = require("path");
 const fs = require('fs');
+const http = require("http");
+const { Server } = require("socket.io");
 
 // ✅ MUST be first before anything else
 dotenv.config();
@@ -12,6 +14,47 @@ console.log("✅ JWT_SECRET loaded:", process.env.JWT_SECRET);
 connectDB();
 
 const app = express();
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: true,
+    credentials: true
+  }
+});
+
+// Store user socket mappings
+const userSockets = new Map();
+
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+
+  socket.on("register", (userId) => {
+    userSockets.set(userId, socket.id);
+    console.log("User registered:", userId);
+  });
+
+  socket.on("disconnect", () => {
+    for (let [userId, sockId] of userSockets.entries()) {
+      if (sockId === socket.id) {
+        userSockets.delete(userId);
+        break;
+      }
+    }
+    console.log("Client disconnected:", socket.id);
+  });
+});
+
+// Make io available to routes
+app.set("io", io);
+
+// Helper function to send notification to a user
+app.locals.sendNotification = (userId, notification) => {
+  const socketId = userSockets.get(userId);
+  if (socketId) {
+    io.to(socketId).emit("notification", notification);
+  }
+};
 
 app.use(cors({
   origin: true,
@@ -44,6 +87,6 @@ app.use("/api/locations", require("./routes/locationRoutes"));
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
