@@ -1,11 +1,33 @@
 const express = require("express");
 const router = express.Router();
 const Response = require("../models/Response");
+const Requirement = require("../models/Requirement");
+const Store = require("../models/Store");
 
 router.post("/create", async (req, res) => {
   try {
     const response = new Response(req.body);
     await response.save();
+    
+    const io = req.app.get("io");
+    const requirement = await Requirement.findById(req.body.requirementId);
+    
+    if (requirement && requirement.createdBy) {
+      const store = await Store.findById(req.body.storeId);
+      const storeName = store?.storeName || "A store";
+      
+      const notification = {
+        type: "quotation",
+        title: "New Quotation Received",
+        message: `${storeName} sent a quotation for "${requirement.reqTitle}"`,
+        requirementId: req.body.requirementId,
+        responseId: response._id,
+        timestamp: new Date()
+      };
+      
+      io.to(requirement.createdBy.toString()).emit("notification", notification);
+    }
+    
     res.json(response);
   } catch (error) {
     res.status(500).json(error);
@@ -48,6 +70,26 @@ router.put("/:id", async (req, res) => {
       req.body,
       { new: true }
     );
+    
+    if (req.body.status === "Accepted" && data) {
+      const io = req.app.get("io");
+      const requirement = await Requirement.findById(data.requirementId);
+      const store = await Store.findById(data.storeId);
+      
+      if (store && store.storeOwner) {
+        const notification = {
+          type: "quotation_accepted",
+          title: "Quotation Accepted",
+          message: `Your quotation for "${requirement?.reqTitle || "a requirement"}" was accepted!`,
+          requirementId: data.requirementId,
+          responseId: data._id,
+          timestamp: new Date()
+        };
+        
+        io.to(store.storeOwner.toString()).emit("notification", notification);
+      }
+    }
+    
     res.json(data);
   } catch (error) {
     res.status(500).json(error);

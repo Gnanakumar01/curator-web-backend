@@ -237,7 +237,7 @@ router.get("/", async (req, res) => {
   try {
 
     const stores = await Store.find({
-      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }]
+      isDeleted: { $ne: true }
     });
 
     console.log("Found stores count:", stores.length);
@@ -270,7 +270,7 @@ router.get("/owner/:ownerId", async (req, res) => {
     // Direct query — works when storeOwner is stored as ObjectId
     let stores = await Store.find({
       storeOwner: ownerId,
-      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }]
+      isDeleted: { $ne: true }
     });
 
     console.log("Found stores with direct match:", stores.length);
@@ -279,7 +279,7 @@ router.get("/owner/:ownerId", async (req, res) => {
     // string instead of ObjectId (common in older/seeded data)
     if (stores.length === 0) {
       const allStores = await Store.find({
-        $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }]
+        isDeleted: { $ne: true }
       });
 
       console.log("Total stores in DB:", allStores.length);
@@ -310,7 +310,10 @@ router.get("/:id", async (req, res) => {
 
   try {
 
-    const store = await Store.findById(req.params.id);
+    const store = await Store.findOne({
+      _id: req.params.id,
+      isDeleted: { $ne: true }
+    });
     res.json(store);
 
   } catch (error) {
