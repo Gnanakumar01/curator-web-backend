@@ -32,7 +32,23 @@ const CITY_LOCALITIES = {
     'Arekere', 'Konanakunte', 'Jaraganahalli', 'Sarakki', 'Puttenahalli',
     'JP Nagar 1st Phase', 'JP Nagar 2nd Phase', 'JP Nagar 3rd Phase',
     'JP Nagar 4th Phase', 'JP Nagar 5th Phase', 'JP Nagar 6th Phase',
-    'JP Nagar 7th Phase', 'JP Nagar 8th Phase', 'JP Nagar 9th Phase'
+    'JP Nagar 7th Phase', 'JP Nagar 8th Phase', 'JP Nagar 9th Phase',
+    'Madiwala', 'Kumaraswamy Layout', 'Uttarahalli Main Road', 'Hosur Road',
+    'Sarjapur Road', 'Bellandur', 'Outer Ring Road', 'Silk Board'
+  ],
+  'bangalore': [
+    'BTM Layout', 'Whitefield', 'Koramangala', 'Indiranagar', 'Jayanagar',
+    'HSR Layout', 'Electronic City', 'Marathahalli', 'Bannerghatta Road',
+    'JP Nagar', 'Banashankari', 'Malleshwaram', 'Rajajinagar', 'Yelahanka',
+    'Hebbal', 'KR Puram', 'Bommanahalli', 'Dasarahalli', 'Mahalakshmi Layout',
+    'Sadashivanagar', 'Basavanagudi', 'Girinagar', 'Vijayanagar', 'Nagarbhavi',
+    'Uttarahalli', 'Kengeri', 'Kaggadasapura', 'Begur', 'Hulimavu', 'Bilekahalli',
+    'Arekere', 'Konanakunte', 'Jaraganahalli', 'Sarakki', 'Puttenahalli',
+    'JP Nagar 1st Phase', 'JP Nagar 2nd Phase', 'JP Nagar 3rd Phase',
+    'JP Nagar 4th Phase', 'JP Nagar 5th Phase', 'JP Nagar 6th Phase',
+    'JP Nagar 7th Phase', 'JP Nagar 8th Phase', 'JP Nagar 9th Phase',
+    'Madiwala', 'Kumaraswamy Layout', 'Uttarahalli Main Road', 'Hosur Road',
+    'Sarjapur Road', 'Bellandur', 'Outer Ring Road', 'Silk Board'
   ],
   'mumbai': [
     'Andheri', 'Bandra', 'Juhu', 'Borivali', 'Malad', 'Goregaon',
@@ -295,8 +311,14 @@ router.get("/areas", async (req, res) => {
     allAreas.sort((a, b) => a.name.localeCompare(b.name));
 
     // If Nominatim returned no results, use hardcoded localities as fallback
-    if (allAreas.length === 0 && CITY_LOCALITIES[cityLower]) {
-      const fallbackLocalities = CITY_LOCALITIES[cityLower];
+    // Check both the original cityLower and the canonical searchCity
+    let fallbackKey = cityLower;
+    if (!CITY_LOCALITIES[fallbackKey]) {
+      fallbackKey = searchCity.toLowerCase();
+    }
+    
+    if (allAreas.length === 0 && CITY_LOCALITIES[fallbackKey]) {
+      const fallbackLocalities = CITY_LOCALITIES[fallbackKey];
       fallbackLocalities.forEach(locality => {
         allAreas.push({
           name: locality,
@@ -314,8 +336,16 @@ router.get("/areas", async (req, res) => {
     
     // If Nominatim fails completely, use hardcoded localities as fallback
     const cityLower = city.toLowerCase().trim();
-    if (CITY_LOCALITIES[cityLower]) {
-      const fallbackLocalities = CITY_LOCALITIES[cityLower];
+    let fallbackKey = cityLower;
+    // Also check for canonical city name (bengaluru instead of bangalore)
+    if (cityLower === 'bangalore') fallbackKey = 'bengaluru';
+    else if (cityLower === 'bombay') fallbackKey = 'mumbai';
+    else if (cityLower === 'madras') fallbackKey = 'chennai';
+    else if (cityLower === 'calcutta') fallbackKey = 'kolkata';
+    else if (cityLower === 'poona') fallbackKey = 'pune';
+    
+    if (CITY_LOCALITIES[fallbackKey]) {
+      const fallbackLocalities = CITY_LOCALITIES[fallbackKey];
       const allAreas = fallbackLocalities.map(locality => ({
         name: locality,
         type: 'locality',

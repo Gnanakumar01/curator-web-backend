@@ -39,6 +39,23 @@ router.post("/create", async (req, res) => {
     });
 
     await notification.save();
+    
+    // Send real-time notification via WebSocket
+    const io = req.app.get("io");
+    const userSockets = req.app.locals.userSockets;
+    const socketId = userSockets?.get(recipientId.toString());
+    if (socketId) {
+      io.to(socketId).emit("notification", {
+        type: type,
+        title: title,
+        message: message,
+        requirementId: relatedModel === "Requirement" ? relatedId : null,
+        responseId: relatedModel === "Response" ? relatedId : null,
+        notificationId: notification._id,
+        timestamp: new Date()
+      });
+    }
+    
     res.json({ success: true, data: notification });
   } catch (error) {
     console.error("Error creating notification:", error);

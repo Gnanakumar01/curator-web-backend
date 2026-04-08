@@ -44,6 +44,11 @@ exports.createRequirement = async (req, res) => {
 
     await newRequirement.save();
 
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("newRequirement", newRequirement);
+    }
+
     res.status(201).json({
       success: true,
       data: newRequirement
