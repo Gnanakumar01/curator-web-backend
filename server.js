@@ -25,10 +25,7 @@ const io = new Server(server, {
 
 // Store user socket mappings
 const userSockets = new Map();
-<<<<<<< HEAD
-=======
 app.locals.userSockets = userSockets;
->>>>>>> 898b39d (routes modifed)
 
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);

@@ -25,14 +25,10 @@ router.post("/create", async (req, res) => {
         timestamp: new Date()
       };
       
-<<<<<<< HEAD
-      io.to(requirement.createdBy.toString()).emit("notification", notification);
-=======
       const socketId = req.app.locals.userSockets?.get(requirement.createdBy.toString());
       if (socketId) {
         io.to(socketId).emit("notification", notification);
       }
->>>>>>> 898b39d (routes modifed)
     }
     
     res.json(response);
@@ -93,14 +89,10 @@ router.put("/:id", async (req, res) => {
           timestamp: new Date()
         };
         
-<<<<<<< HEAD
-        io.to(store.storeOwner.toString()).emit("notification", notification);
-=======
         const socketId = req.app.locals.userSockets?.get(store.storeOwner.toString());
         if (socketId) {
           io.to(socketId).emit("notification", notification);
         }
->>>>>>> 898b39d (routes modifed)
       }
     }
     
