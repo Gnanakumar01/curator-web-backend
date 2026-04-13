@@ -9,7 +9,14 @@ router.post("/create", async (req, res) => {
 
   try {
 
-    const { userId, ...userData } = req.body;
+    const { userId, phone, ...userData } = req.body;
+    
+    if (phone) {
+      const phoneRegex = /^[6-9]\d{9}$/;
+      if (!phoneRegex.test(phone)) {
+        return res.status(400).json({ message: "Invalid mobile number format. Must be 10 digits starting with 6-9" });
+      }
+    }
     
     let user;
     
