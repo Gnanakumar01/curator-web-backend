@@ -14,6 +14,7 @@ const requirementSchema = new mongoose.Schema({
 
   deadLineDate: Date,
   targetLocation: String,
+  city: String,
   deliveryDate: Date,
 
   reqStatus: {
