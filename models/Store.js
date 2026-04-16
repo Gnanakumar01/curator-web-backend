@@ -43,6 +43,18 @@ const storeSchema = new mongoose.Schema({
     default: []
   },
 
+  // Identity proof field (license/GST certificate)
+  storeProof: {
+    type: String,
+    default: ""
+  },
+
+  // Store owner ID proof field (Aadhaar, PAN, etc.) - multiple images
+  storeOwnerIdProof: {
+    type: [String],
+    default: []
+  },
+
   storeOwner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
