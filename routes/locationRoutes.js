@@ -3,10 +3,7 @@ const router = express.Router();
 const { geocodeAddress } = require("../utils/geocoding");
 const axios = require('axios');
 
-// LocationIQ API - Free tier: 10,000 requests/month
-// Get free key at: https://locationiq.com/
-const LOCATIONIQ_API_KEY = process.env.LOCATIONIQ_API_KEY || '';
-const USE_LOCATIONIQ = LOCATIONIQ_API_KEY.length > 0;
+const NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
 
 // Common Indian cities and their aliases
 const CITY_ALIASES = {
@@ -197,26 +194,45 @@ const CITY_LOCALITIES = {
   ]
 };
 
-// Helper function to search using LocationIQ (better than Nominatim)
-async function searchLocationIQ(query) {
-  const response = await axios.get('https://us1.locationiq.com/v1/search.php', {
-    params: {
-      key: LOCATIONIQ_API_KEY,
-      q: query,
-      format: 'json',
-      limit: 15,
-      countrycodes: 'in',
-      addressdetails: 1,
-      normalizeaddress: 1
+async function searchNominatim(query, viewbox = null, bounded = 0) {
+  const params = {
+    q: query,
+    format: 'json',
+    limit: 20,
+    countrycodes: 'in',
+    addressdetails: 1,
+    extratags: 1
+  };
+  
+  if (viewbox) {
+    params.viewbox = viewbox;
+    params.bounded = bounded;
+  }
+  
+  const response = await axios.get(`${NOMINATIM_BASE_URL}/search`, {
+    params,
+    headers: {
+      'User-Agent': 'Curator/1.0'
     }
   });
   return response.data;
 }
 
-/**
- * Search for locations - uses LocationIQ if available, falls back to Nominatim
- * Returns cities, localities, and areas matching the query
- */
+async function queryNominatimReverse(lat, lon) {
+  const response = await axios.get(`${NOMINATIM_BASE_URL}/reverse`, {
+    params: {
+      lat,
+      lon,
+      format: 'json',
+      addressdetails: 1
+    },
+    headers: {
+      'User-Agent': 'Curator/1.0'
+    }
+  });
+  return response.data;
+}
+
 router.get("/search", async (req, res) => {
   try {
     const { q } = req.query;
@@ -227,11 +243,9 @@ router.get("/search", async (req, res) => {
 
     const queryLower = q.toLowerCase().trim();
     
-    // Check if query matches a known city alias
     let searchQueries = [q];
     for (const [key, aliases] of Object.entries(CITY_ALIASES)) {
       if (aliases.some(alias => queryLower.includes(alias))) {
-        // Add all aliases to search
         searchQueries = [...new Set([...searchQueries, ...aliases])];
         break;
       }
@@ -242,48 +256,28 @@ router.get("/search", async (req, res) => {
 
     for (const searchQuery of searchQueries) {
       try {
-        let response;
-        if (USE_LOCATIONIQ) {
-          // Use LocationIQ (faster and more reliable)
-          response = { data: await searchLocationIQ(searchQuery) };
-        } else {
-          // Fallback to Nominatim
-          response = await axios.get('https://nominatim.openstreetmap.org/search', {
-            params: {
-              q: searchQuery,
-              format: 'json',
-              limit: 15,
-              countrycodes: 'in',
-              addressdetails: 1,
-              extratags: 1
-            },
-            headers: {
-              'User-Agent': 'Qurator/1.0'
-            }
-          });
-        }
+        const data = await searchNominatim(searchQuery);
 
-        if (response.data && response.data.length > 0) {
-          response.data.forEach(result => {
+        if (data && data.length > 0) {
+          data.forEach(result => {
             const address = result.address || {};
             
-            // Extract relevant location parts
             const city = address.city || address.town || address.municipality || address.county;
             const locality = address.suburb || address.neighbourhood || address.locality || address.village;
             const state = address.state;
             
-            // Add city if available and not seen
             if (city && !seen.has(city.toLowerCase())) {
               seen.add(city.toLowerCase());
               allLocations.push({
                 name: city,
                 type: 'city',
                 state: state || '',
-                displayName: result.display_name
+                displayName: result.display_name,
+                lat: result.lat,
+                lon: result.lon
               });
             }
             
-            // Add locality if available and not seen
             if (locality && !seen.has(locality.toLowerCase())) {
               seen.add(locality.toLowerCase());
               allLocations.push({
@@ -291,7 +285,9 @@ router.get("/search", async (req, res) => {
                 type: 'locality',
                 city: city || '',
                 state: state || '',
-                displayName: result.display_name
+                displayName: result.display_name,
+                lat: result.lat,
+                lon: result.lon
               });
             }
           });
@@ -301,14 +297,13 @@ router.get("/search", async (req, res) => {
       }
     }
 
-    // Sort: cities first, then localities
     allLocations.sort((a, b) => {
       if (a.type === 'city' && b.type !== 'city') return -1;
       if (a.type !== 'city' && b.type === 'city') return 1;
       return a.name.localeCompare(b.name);
     });
 
-    res.json(allLocations.slice(0, 15)); // Limit to 15 results
+    res.json(allLocations.slice(0, 15));
 
   } catch (error) {
     console.error("Location search error:", error.message);
@@ -316,9 +311,6 @@ router.get("/search", async (req, res) => {
   }
 });
 
-/**
- * Get detailed location info including pincode
- */
 router.get("/details", async (req, res) => {
   try {
     const { name, city } = req.query;
@@ -327,7 +319,6 @@ router.get("/details", async (req, res) => {
       return res.json({});
     }
 
-    // Build the query string
     let queryStr = name;
     if (city) {
       queryStr = `${name}, ${city}, India`;
@@ -336,52 +327,21 @@ router.get("/details", async (req, res) => {
     }
 
     let locationData = {};
+    const results = await searchNominatim(queryStr);
     
-    if (USE_LOCATIONIQ) {
-      // Use LocationIQ for more details
-      const results = await searchLocationIQ(queryStr);
-      if (results && results.length > 0) {
-        const result = results[0];
-        locationData = {
-          name: result.address?.name || result.display_name?.split(',')[0] || name,
-          displayName: result.display_name,
-          lat: result.lat,
-          lon: result.lon,
-          pincode: result.address?.postcode || '',
-          city: result.address?.city || result.address?.town || result.address?.municipality || '',
-          state: result.address?.state || '',
-          type: result.type || 'locality'
-        };
-      }
-    } else {
-      // Fallback to Nominatim
-      const response = await axios.get('https://nominatim.openstreetmap.org/search', {
-        params: {
-          q: queryStr,
-          format: 'json',
-          limit: 1,
-          countrycodes: 'in',
-          addressdetails: 1
-        },
-        headers: {
-          'User-Agent': 'Qurator/1.0'
-        }
-      });
-
-      if (response.data && response.data.length > 0) {
-        const result = response.data[0];
-        const address = result.address || {};
-        locationData = {
-          name: address.name || address.suburb || address.neighbourhood || name,
-          displayName: result.display_name,
-          lat: result.lat,
-          lon: result.lon,
-          pincode: address.postcode || '',
-          city: address.city || address.town || address.municipality || '',
-          state: address.state || '',
-          type: result.type
-        };
-      }
+    if (results && results.length > 0) {
+      const result = results[0];
+      const address = result.address || {};
+      locationData = {
+        name: address.name || address.suburb || address.neighbourhood || name,
+        displayName: result.display_name,
+        lat: result.lat,
+        lon: result.lon,
+        pincode: address.postcode || '',
+        city: address.city || address.town || address.municipality || '',
+        state: address.state || '',
+        type: result.type || 'locality'
+      };
     }
 
     res.json(locationData);
@@ -391,10 +351,6 @@ router.get("/details", async (req, res) => {
   }
 });
 
-/**
- * Get cities and localities within a specific city (e.g., "Bengaluru")
- * This helps when searching for "bengaluru" to show all areas within Bengaluru
- */
 router.get("/areas", async (req, res) => {
   try {
     const { city } = req.query;
@@ -405,71 +361,46 @@ router.get("/areas", async (req, res) => {
 
     const cityLower = city.toLowerCase().trim();
     
-    // Check if city matches a known alias
     let searchCity = city;
     for (const [key, aliases] of Object.entries(CITY_ALIASES)) {
       if (aliases.some(alias => cityLower.includes(alias))) {
-        searchCity = key; // Use the canonical name
+        searchCity = key;
         break;
       }
     }
 
-    // First, get the city's bounding box using Nominatim
-    const cityResponse = await axios.get('https://nominatim.openstreetmap.org/search', {
-      params: {
-        q: searchCity,
-        format: 'json',
-        limit: 1,
-        countrycodes: 'in',
-        addressdetails: 1
-      },
-      headers: {
-        'User-Agent': 'Qurator/1.0'
-      }
-    });
+    const cityResponse = await searchNominatim(searchCity);
 
-    if (!cityResponse.data || cityResponse.data.length === 0) {
+    if (!cityResponse || cityResponse.length === 0) {
       return res.json([]);
     }
 
-    const cityData = cityResponse.data[0];
+    const cityData = cityResponse[0];
     const boundingBox = cityData.boundingbox;
 
     if (!boundingBox || boundingBox.length < 4) {
       return res.json([]);
     }
 
-    // Search for areas within the city's bounding box using multiple queries
+    const viewbox = `${boundingBox[2]},${boundingBox[0]},${boundingBox[3]},${boundingBox[1]}`;
     const allAreas = [];
     const seen = new Set();
     
-    // Try different search queries to find more localities
     const searchQueries = [
       `${searchCity} locality`,
       `${searchCity} area`,
       `${searchCity} neighbourhood`,
-      `${searchCity} suburb`
+      `${searchCity} suburb`,
+      `${searchCity} residential`,
+      `${searchCity} layout`
     ];
 
     for (const searchQuery of searchQueries) {
       try {
-        const areasResponse = await axios.get('https://nominatim.openstreetmap.org/search', {
-          params: {
-            q: searchQuery,
-            format: 'json',
-            limit: 20,
-            countrycodes: 'in',
-            addressdetails: 1,
-            viewbox: `${boundingBox[2]},${boundingBox[0]},${boundingBox[3]},${boundingBox[1]}`,
-            bounded: 1
-          },
-          headers: {
-            'User-Agent': 'Qurator/1.0'
-          }
-        });
+        const areasResponse = await searchNominatim(searchQuery, viewbox, 1);
 
-        if (areasResponse.data && areasResponse.data.length > 0) {
-          areasResponse.data.forEach(result => {
+        if (areasResponse && areasResponse.length > 0) {
+          areasResponse.forEach(result => {
             const address = result.address || {};
             const locality = address.suburb || address.neighbourhood || address.locality || address.village || address.town;
             
@@ -479,7 +410,9 @@ router.get("/areas", async (req, res) => {
                 name: locality,
                 type: 'locality',
                 city: city,
-                displayName: result.display_name
+                displayName: result.display_name,
+                lat: result.lat,
+                lon: result.lon
               });
             }
           });
@@ -489,16 +422,12 @@ router.get("/areas", async (req, res) => {
       }
     }
 
-    // Sort alphabetically
     allAreas.sort((a, b) => a.name.localeCompare(b.name));
 
-    // If Nominatim returned no results, use hardcoded localities as fallback
-    // Check both the original cityLower and the canonical searchCity
     let fallbackKey = cityLower;
     if (!CITY_LOCALITIES[fallbackKey]) {
       fallbackKey = searchCity.toLowerCase();
     }
-    // Bangalore is same as Bengaluru
     if (fallbackKey === 'bangalore' && CITY_LOCALITIES['bengaluru']) {
       fallbackKey = 'bengaluru';
     }
@@ -515,15 +444,13 @@ router.get("/areas", async (req, res) => {
       });
     }
 
-    res.json(allAreas.slice(0, 20)); // Limit to 20 results
+    res.json(allAreas.slice(0, 30));
 
   } catch (error) {
     console.error("Areas search error:", error.message);
     
-    // If Nominatim fails completely, use hardcoded localities as fallback
     const cityLower = city.toLowerCase().trim();
     let fallbackKey = cityLower;
-    // Also check for canonical city name (bengaluru instead of bangalore)
     if (cityLower === 'bangalore') fallbackKey = 'bengaluru';
     else if (cityLower === 'bombay') fallbackKey = 'mumbai';
     else if (cityLower === 'madras') fallbackKey = 'chennai';
@@ -538,7 +465,7 @@ router.get("/areas", async (req, res) => {
         city: city,
         displayName: `${locality}, ${city}`
       }));
-      return res.json(allAreas.slice(0, 20));
+      return res.json(allAreas.slice(0, 30));
     }
     
     res.status(500).json({ message: "Failed to search areas", error: error.message });

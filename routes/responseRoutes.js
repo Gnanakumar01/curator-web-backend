@@ -59,7 +59,8 @@ router.get("/requirement/:requirementId", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const data = await Response.findById(req.params.id)
-      .populate("storeId", "storeName storeImage storeRatings storeAddressLine storeLocality storeCity");
+      .populate("storeId", "storeName storeImage storeRatings storeAddressLine storeLocality storeCity")
+      .populate("requirementId", "reqTitle expectedBudget targetLocation deadLineDate");
     res.json(data);
   } catch (error) {
     res.status(500).json(error);
