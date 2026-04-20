@@ -69,7 +69,8 @@ GET ALL REQUIREMENTS
 exports.getRequirements = async (req, res) => {
   try {
     const requirements = await Requirement.find({ isDeleted: false })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .populate("createdBy", "firstName lastName email");
 
     res.status(200).json({
       success: true,

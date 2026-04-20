@@ -43,7 +43,8 @@ GET ALL REQUIREMENTS
 router.get("/", async (req, res) => {
   try {
     const requirements = await Requirement.find({ isDeleted: false })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .populate("createdBy", "firstName lastName email");
 
     res.json({
       success: true,
@@ -67,7 +68,7 @@ router.get("/:id", async (req, res) => {
     const requirement = await Requirement.findOne({
       _id: req.params.id,
       isDeleted: false
-    });
+    }).populate("createdBy", "firstName lastName email");
 
     if (!requirement) {
       return res.status(404).json({ 
@@ -149,6 +150,11 @@ router.delete("/:id", async (req, res) => {
         success: false,
         message: "Requirement not found" 
       });
+    }
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("requirementDeleted", req.params.id);
     }
 
     res.json({ 
