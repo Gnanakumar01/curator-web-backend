@@ -30,9 +30,16 @@ app.locals.userSockets = userSockets;
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  socket.on("register", (userId) => {
+  socket.on("register", (userId, storeCategory) => {
     userSockets.set(userId, socket.id);
-    console.log("User registered:", userId);
+    console.log("User registered:", userId, "storeCategory:", storeCategory);
+    
+    // Join category room if store owner
+    if (storeCategory) {
+      const categoryRoom = `category_${storeCategory.toLowerCase()}`;
+      socket.join(categoryRoom);
+      console.log("User joined room:", categoryRoom);
+    }
   });
 
   socket.on("disconnect", () => {

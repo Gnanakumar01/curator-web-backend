@@ -46,7 +46,15 @@ exports.createRequirement = async (req, res) => {
 
     const io = req.app.get("io");
     if (io) {
+      // Emit to all clients (for client-side filtering)
       io.emit("newRequirement", newRequirement);
+      
+      // Also emit to specific category room for targeted notifications
+      const category = newRequirement.reqCategory?.toLowerCase();
+      if (category) {
+        io.to(`category_${category}`).emit("newRequirement", newRequirement);
+        console.log(`Emitted newRequirement to category_${category} room`);
+      }
     }
 
     res.status(201).json({
