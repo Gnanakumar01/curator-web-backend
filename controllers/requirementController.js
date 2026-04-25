@@ -44,6 +44,9 @@ exports.createRequirement = async (req, res) => {
 
     await newRequirement.save();
 
+    // Populate createdBy for socket emission (needed for client-side filtering)
+    await newRequirement.populate("createdBy", "firstName lastName email");
+
     const io = req.app.get("io");
     if (io) {
       // Emit to all clients (for client-side filtering)

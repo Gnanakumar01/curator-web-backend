@@ -87,7 +87,6 @@ app.use("/api/upload", require("./routes/uploadRoutes"));
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/stores", require("./routes/storeRoutes"));
-// app.use("/api/categories", require("./routes/categoryRoutes"));
 app.use("/api/requirements", require("./routes/requirementRoutes"));
 app.use("/api/responses", require("./routes/responseRoutes"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
