@@ -34,7 +34,11 @@ io.on("connection", (socket) => {
     userSockets.set(userId, socket.id);
     console.log("User registered:", userId, "storeCategory:", storeCategory);
     
-    // Join category room if store owner
+    // Leave all category rooms first
+    const rooms = Array.from(socket.rooms || []).filter(room => room.startsWith('category_'));
+    rooms.forEach(room => socket.leave(room));
+    
+    // Join new category room if store owner
     if (storeCategory) {
       const categoryRoom = `category_${storeCategory.toLowerCase()}`;
       socket.join(categoryRoom);
