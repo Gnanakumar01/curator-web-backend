@@ -1,9 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const { geocodeAddress } = require("../utils/geocoding");
-const axios = require('axios');
-
-const NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
 
 // Common Indian cities and their aliases
 const CITY_ALIASES = {
@@ -242,68 +238,42 @@ router.get("/search", async (req, res) => {
     }
 
     const queryLower = q.toLowerCase().trim();
+    const allResults = [];
     
-    let searchQueries = [q];
-    for (const [key, aliases] of Object.entries(CITY_ALIASES)) {
-      if (aliases.some(alias => queryLower.includes(alias))) {
-        searchQueries = [...new Set([...searchQueries, ...aliases])];
-        break;
+    // ONLY search in CITY_LOCALITIES - no external API
+    for (const [cityKey, localities] of Object.entries(CITY_LOCALITIES)) {
+      // Match city name
+      if (cityKey.includes(queryLower) || CITY_ALIASES[cityKey]?.some(alias => alias.includes(queryLower))) {
+        allResults.push({
+          name: cityKey.charAt(0).toUpperCase() + cityKey.slice(1),
+          type: 'city',
+          displayName: cityKey.charAt(0).toUpperCase() + cityKey.slice(1) + ', India'
+        });
       }
-    }
-
-    const allLocations = [];
-    const seen = new Set();
-
-    for (const searchQuery of searchQueries) {
-      try {
-        const data = await searchNominatim(searchQuery);
-
-        if (data && data.length > 0) {
-          data.forEach(result => {
-            const address = result.address || {};
-            
-            const city = address.city || address.town || address.municipality || address.county;
-            const locality = address.suburb || address.neighbourhood || address.locality || address.village;
-            const state = address.state;
-            
-            if (city && !seen.has(city.toLowerCase())) {
-              seen.add(city.toLowerCase());
-              allLocations.push({
-                name: city,
-                type: 'city',
-                state: state || '',
-                displayName: result.display_name,
-                lat: result.lat,
-                lon: result.lon
-              });
-            }
-            
-            if (locality && !seen.has(locality.toLowerCase())) {
-              seen.add(locality.toLowerCase());
-              allLocations.push({
-                name: locality,
-                type: 'locality',
-                city: city || '',
-                state: state || '',
-                displayName: result.display_name,
-                lat: result.lat,
-                lon: result.lon
-              });
-            }
+      
+      // Match localities within each city
+      for (const locality of localities) {
+        if (locality.toLowerCase().includes(queryLower)) {
+          allResults.push({
+            name: locality,
+            type: 'locality',
+            city: cityKey.charAt(0).toUpperCase() + cityKey.slice(1),
+            displayName: `${locality}, ${cityKey.charAt(0).toUpperCase() + cityKey.slice(1)}`
           });
         }
-      } catch (err) {
-        console.error(`Error searching for ${searchQuery}:`, err.message);
       }
     }
 
-    allLocations.sort((a, b) => {
-      if (a.type === 'city' && b.type !== 'city') return -1;
-      if (a.type !== 'city' && b.type === 'city') return 1;
-      return a.name.localeCompare(b.name);
+    // Remove duplicates and sort
+    const seen = new Set();
+    const uniqueResults = allResults.filter(item => {
+      const key = `${item.type}:${item.name}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
 
-    res.json(allLocations.slice(0, 15));
+    res.json(uniqueResults.slice(0, 15));
 
   } catch (error) {
     console.error("Location search error:", error.message);
@@ -319,30 +289,16 @@ router.get("/details", async (req, res) => {
       return res.json({});
     }
 
-    let queryStr = name;
-    if (city) {
-      queryStr = `${name}, ${city}, India`;
-    } else {
-      queryStr = `${name}, India`;
-    }
-
-    let locationData = {};
-    const results = await searchNominatim(queryStr);
-    
-    if (results && results.length > 0) {
-      const result = results[0];
-      const address = result.address || {};
-      locationData = {
-        name: address.name || address.suburb || address.neighbourhood || name,
-        displayName: result.display_name,
-        lat: result.lat,
-        lon: result.lon,
-        pincode: address.postcode || '',
-        city: address.city || address.town || address.municipality || '',
-        state: address.state || '',
-        type: result.type || 'locality'
-      };
-    }
+    // Return basic info - pincode would need external API or a pincode database
+    // For now, return empty pincode as CITY_LOCALITIES doesn't include pincodes
+    const locationData = {
+      name: name,
+      displayName: `${name}${city ? ', ' + city : ''}, India`,
+      pincode: '',  // Would need a pincode database or external API
+      city: city || '',
+      state: '',
+      type: 'locality'
+    };
 
     res.json(locationData);
   } catch (error) {
@@ -361,81 +317,27 @@ router.get("/areas", async (req, res) => {
 
     const cityLower = city.toLowerCase().trim();
     
-    let searchCity = city;
-    for (const [key, aliases] of Object.entries(CITY_ALIASES)) {
-      if (aliases.some(alias => cityLower.includes(alias))) {
-        searchCity = key;
-        break;
-      }
-    }
-
-    const cityResponse = await searchNominatim(searchCity);
-
-    if (!cityResponse || cityResponse.length === 0) {
-      return res.json([]);
-    }
-
-    const cityData = cityResponse[0];
-    const boundingBox = cityData.boundingbox;
-
-    if (!boundingBox || boundingBox.length < 4) {
-      return res.json([]);
-    }
-
-    const viewbox = `${boundingBox[2]},${boundingBox[0]},${boundingBox[3]},${boundingBox[1]}`;
-    const allAreas = [];
-    const seen = new Set();
-    
-    const searchQueries = [
-      `${searchCity} locality`,
-      `${searchCity} area`,
-      `${searchCity} neighbourhood`,
-      `${searchCity} suburb`,
-      `${searchCity} residential`,
-      `${searchCity} layout`
-    ];
-
-    for (const searchQuery of searchQueries) {
-      try {
-        const areasResponse = await searchNominatim(searchQuery, viewbox, 1);
-
-        if (areasResponse && areasResponse.length > 0) {
-          areasResponse.forEach(result => {
-            const address = result.address || {};
-            const locality = address.suburb || address.neighbourhood || address.locality || address.village || address.town;
-            
-            if (locality && !seen.has(locality.toLowerCase())) {
-              seen.add(locality.toLowerCase());
-              allAreas.push({
-                name: locality,
-                type: 'locality',
-                city: city,
-                displayName: result.display_name,
-                lat: result.lat,
-                lon: result.lon
-              });
-            }
-          });
-        }
-      } catch (err) {
-        console.error(`Error searching for ${searchQuery}:`, err.message);
-      }
-    }
-
-    allAreas.sort((a, b) => a.name.localeCompare(b.name));
-
+    // ONLY use CITY_LOCALITIES - no external API calls
     let fallbackKey = cityLower;
     if (!CITY_LOCALITIES[fallbackKey]) {
-      fallbackKey = searchCity.toLowerCase();
+      for (const [key, aliases] of Object.entries(CITY_ALIASES)) {
+        if (aliases.some(alias => cityLower.includes(alias))) {
+          fallbackKey = key;
+          break;
+        }
+      }
     }
+    
+    // Convert 'bangalore' to 'bengaluru'
     if (fallbackKey === 'bangalore' && CITY_LOCALITIES['bengaluru']) {
       fallbackKey = 'bengaluru';
     }
+
+    const areas = [];
     
-    if (allAreas.length === 0 && CITY_LOCALITIES[fallbackKey]) {
-      const fallbackLocalities = CITY_LOCALITIES[fallbackKey];
-      fallbackLocalities.forEach(locality => {
-        allAreas.push({
+    if (CITY_LOCALITIES[fallbackKey]) {
+      CITY_LOCALITIES[fallbackKey].forEach(locality => {
+        areas.push({
           name: locality,
           type: 'locality',
           city: city,
@@ -444,11 +346,12 @@ router.get("/areas", async (req, res) => {
       });
     }
 
-    res.json(allAreas.slice(0, 30));
+    res.json(areas.slice(0, 30));
 
   } catch (error) {
     console.error("Areas search error:", error.message);
     
+    // Fallback to CITY_LOCALITIES on error
     const cityLower = city.toLowerCase().trim();
     let fallbackKey = cityLower;
     if (cityLower === 'bangalore') fallbackKey = 'bengaluru';
@@ -458,14 +361,13 @@ router.get("/areas", async (req, res) => {
     else if (cityLower === 'poona') fallbackKey = 'pune';
     
     if (CITY_LOCALITIES[fallbackKey]) {
-      const fallbackLocalities = CITY_LOCALITIES[fallbackKey];
-      const allAreas = fallbackLocalities.map(locality => ({
+      const areas = CITY_LOCALITIES[fallbackKey].map(locality => ({
         name: locality,
         type: 'locality',
         city: city,
         displayName: `${locality}, ${city}`
       }));
-      return res.json(allAreas.slice(0, 30));
+      return res.json(areas.slice(0, 30));
     }
     
     res.status(500).json({ message: "Failed to search areas", error: error.message });

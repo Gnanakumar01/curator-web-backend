@@ -7,9 +7,9 @@ const fs = require('fs');
 const http = require("http");
 const { Server } = require("socket.io");
 
-// ✅ MUST be first before anything else
+// MUST be first before anything else
 dotenv.config();
-console.log("✅ JWT_SECRET loaded:", process.env.JWT_SECRET);
+console.log("JWT_SECRET loaded:", process.env.JWT_SECRET);
 
 connectDB();
 
@@ -18,8 +18,8 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: true,
-    credentials: true
+    origin: "*",
+    methods: ["GET", "POST"]
   }
 });
 
@@ -83,7 +83,7 @@ if (!fs.existsSync('uploads')) {
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ✅ Add upload route
+// Add upload route
 const uploadRoutes = require("./routes/uploadRoutes");
 app.use("/api/upload", uploadRoutes);
 
