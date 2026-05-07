@@ -1,5 +1,9 @@
 const express = require("express");
 const router = express.Router();
+const axios = require("axios");
+
+// Nominatim API base URL
+const NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org";
 
 // Common Indian cities and their aliases
 const CITY_ALIASES = {
@@ -21,214 +25,133 @@ const CITY_ALIASES = {
 // Well-known localities for major Indian cities (fallback when Nominatim fails)
 const CITY_LOCALITIES = {
   'bengaluru': [
-    // South Bangalore
-    'BTM Layout', 'Jayanagar', 'Jayanagar 1st Block', 'Jayanagar 2nd Block', 'Jayanagar 3rd Block',
-    'Jayanagar 4th Block', 'Jayanagar 5th Block', 'Jayanagar 6th Block', 'Jayanagar 7th Block', 'Jayanagar 8th Block', 'Jayanagar 9th Block',
-    'Banashankari', 'Banashankari 2nd Stage', 'Banashankari 3rd Stage',
-    'Kumaraswamy Layout', 'Uttarahalli', 'Uttarahalli Main Road', 'Vasanth Nagar',
-    'Sarjapur Road', 'Sarjapur', 'Bellandur', 'Outer Ring Road', 'Silk Board',
-    'HSR Layout', 'HSR Sector 1', 'HSR Sector 2', 'HSR Sector 3', 'HSR Sector 4', 'HSR Sector 5', 'HSR Sector 6', 'HSR Sector 7',
-    'Haralur Road', 'Carmelaram', 'Kasavanahalli', 'Kaikondrahalli',
-    'Bannerghatta Road', 'Bannerghatta', 'Adugodi', 'Lakkasandra',
-    // Central Bangalore
-    'Koramangala', 'Koramangala 1st Block', 'Koramangala 2nd Block', 'Koramangala 3rd Block',
-    'Koramangala 4th Block', 'Koramangala 5th Block', 'Koramangala 6th Block', 'Koramangala 7th Block', 'Koramangala 8th Block',
-    'Indiranagar', 'Indiranagar 1st Stage', 'Indiranagar 2nd Stage', 'Indiranagar 3rd Stage', 'Indiranagar 4th Stage', 'Indiranagar 5th Stage',
-    'Domlur', 'Domlur Layout',
-    'New Thippasandra', 'Kacharakanahalli', 'Kodihalli',
-    'MG Road', 'Brigade Road', 'Church Street', 'Commercial Street',
-    'Richmond Town', 'Richmond Road', 'Sanjay Nagar', 'Sanjay Nagar 1st Block',
-    'Shanthi Nagar', 'Shanthi Nagar',
-    // North Bangalore
-    'Malleshwaram', 'Malleshwaram 8th Cross', 'Malleshwaram 7th Cross', 'Malleshwaram 6th Cross',
-    'Rajajinagar', 'Rajajinagar 1st Block', 'Rajajinagar 2nd Block', 'Rajajinagar 3rd Block',
-    'Rajajinagar 4th Block', 'Rajajinagar 5th Block', 'Rajajinagar 6th Block',
-    'Vijayanagar', 'Vijayanagar 2nd Stage', 'Vijayanagar 4th Block',
-    'Nagarbhavi', 'Nagarbhavi 2nd Stage',
-    'Yeshwantpur', 'Yeshwantpur 2nd Phase',
-    'Mahalakshmi Layout', 'Mahalakshmi Extension',
-    'Rajarajeshwari Nagar', 'Rajarajeshwari Nagar 2nd Stage',
-    'Nandini Layout', 'Annachandra Gardens',
-    // East Bangalore
-    'Whitefield', 'Whitefield Railway Station', 'ITPL', 'Brookfield',
-    'Marathahalli', 'Marathahalli Bridge', 'Kundalahalli Gate', 'Spica',
-    'Varthur', 'Varthur Main Road', 'Gunjur', 'Gunjur Main Road',
-    'Benniganahalli', 'Kacharakanahalli Junction',
-    'KR Puram', 'KRS Layout', 'Mahadevapura', 'Grandhasavanahalli',
-    'Tin Factory', 'Sanjay Gandhi Nagar',
-    'CV Raman Nagar', 'New Thippasandra',
-    // West Bangalore
-    'Vijayanagar', 'Vijayanagar 2nd Stage', 'Vijayanagar 4th Block',
-    'Mahalakshmi Layout', 'Rajajinagar Industrial Layout',
-    'Dasarahalli', 'Dasarahalli Main Road',
-    'Manjunathanagar', 'Manjunathanagar Road',
-    'Kengeri', 'Kengeri Satellite Town', 'Kengeri Industrial Area',
-    'Nayandahalli', 'Rajarajeshwari Nagar',
-    // Additional popular areas
-    'Hosur Road', 'Electronic City', 'Electronic City Phase 1', 'Electronic City Phase 2',
-    'Electronic City Phase 3', 'Electronic City Junction',
-    'JP Nagar', 'JP Nagar 1st Phase', 'JP Nagar 2nd Phase', 'JP Nagar 3rd Phase',
-    'JP Nagar 4th Phase', 'JP Nagar 5th Phase', 'JP Nagar 6th Phase',
-    'JP Nagar 7th Phase', 'JP Nagar 8th Phase', 'JP Nagar 9th Phase',
-    'Madiwala', 'Madiwala Market', 'St. Marks Road',
-    'Shivaji Nagar', 'Cantonment', 'Richmond Circle',
-    'HAL', 'HAL 2nd Stage', 'HAL 3rd Stage',
-    'AECS Layout', 'AECS Layout Kundalahalli',
-    'Brookfield', 'Immadihalli', 'Spig Road',
-    'Frazer Town', 'Cox Town', 'Cooke Town',
-    'Ulsoor', 'Ulsoor Lake', 'Halasuru',
-    'S腺rpur', 'Mg Road Metro',
-    'Yelahanka', 'Yelahanka Old Town', 'Yelahanka New Town',
-    'Kodigehalli', 'Kodigehalli Main Road', 'Sahakarnagar',
-    'Hebbal', 'Hebbal Flyover', 'Lokhandwala Layout',
-    'Jakkur', 'Jakkur Aerodrome', 'Uttarahalli Main Road',
-    'Kalyan Nagar', 'Kalyan Nagar 2nd Block', 'Kalyan Nagar 3rd Block',
-    'Kammanahalli', 'Kammanahalli Main Road',
-    'Lingarajapuram', 'Lingarajapuram Road',
-    'Banaswadi', 'Banaswadi Main Road',
-    'Horamavu', 'Horamavu BDA Layout', 'Horamavu Main Road',
-    'Ramamurthy Nagar', 'Ramamurthy Nagar 2nd Block',
-    // Tech Parks
-    'Manyata Tech Park', 'Manyata Embassy Business Park',
-    'RMZ Centennial', 'RMZ Tech Park', 'RMZ Infinity',
-    'Bagmane Tech Park', 'Bagmane World Technology Center',
-    'Prestige Tech Park', 'Prestige Technology Park',
-    'Divya Shree Chambers', 'DLF Glen', 'DLF Corporate Park',
-    'Brigade Tech Park', 'Brigade Millennium',
-    'RMZ Legacy', 'RMZ Latitude',
-    'Mantri Commerz', 'Mantri Residency',
-    // New Areas in North Bangalore
-    'Hennur', 'Hennur Main Road', 'Hennur Cross', 'Hennur Gardens',
-    'Kannur', 'Kannur Main Road',
-    'Bagalur', 'Bagalur Cross',
-    'Yelahanka Road', 'Devanahalli', 'Devanahalli Road',
-    'Kolkata', 'Kolar Gold Fields',
-    // New Areas in East Bangalore
-    'Hoodi', 'Hoodi Junction',
-    'Graphite India Road', 'Hoskote', 'Hoskote Road',
-    'Tin Factory', 'Tin Factory Junction',
-    'Mahadevapura', 'Mahadevapura Industrial Area',
-    'Sadaramangala', 'Ayappa Nagar',
-    // New Areas in South Bangalore
-    'Gottigere', 'Gottigere Cross',
-    'Banerghatta', 'Anekal', 'Chapagar',
-    'Hosur Road', 'Begur', 'Begur Main Road',
-    'Subramanyapura', 'Uttarahalli',
-    'Konanakunte', 'Konanakunte Cross',
-    'Anjanapura', 'Anjanapura Main Road',
-    'Doddakallasandra', 'Kanakapura Road',
-    // Other areas
-    'Wilson Garden', 'Lalbagh', 'Lalbagh Main Road',
-    'Basavanagudi', 'Bull Temple Road', 'Hanumantha Nagar',
-    'Girinagar', 'Girinagar 2nd Stage',
-    'Sadashivanagar', 'Sadashivanagar 2nd Cross',
-    'Gandhi Bazaar', 'Gandhi Bazaar Main Road',
-    'Chikkpet', 'Chikkpet Main Road',
-    'Narayan Singh Building', 'City Market'
+    'BTM Layout', 'Jayanagar','NRI Layout','Madiwala', 'Koramangala', 'Indiranagar', 'Malleshwaram',
+    'Rajajinagar', 'Vijayanagar', 'Whitefield', 'Marathahalli', 'HSR Layout',
+    'JP Nagar', 'Banashankari', 'Basavanagudi', 'Girinagar', 'Yelahanka',
+    'Hebbal', 'Kalyan Nagar', 'Kammanahalli', 'Ulsoor', 'Domlur'
   ],
-  // Bangalore is same as Bengaluru
   'bangalore': [],
   'mumbai': [
     'Andheri', 'Bandra', 'Juhu', 'Borivali', 'Malad', 'Goregaon',
-    'Kandivali', 'Dahisar', 'Mira Road', 'Bhayandar', 'Vasai', 'Virar',
-    'Nallasopara', 'Palghar', 'Dahanu', 'Thane', 'Dombivli', 'Kalyan',
-    'Ulhasnagar', 'Ambernath', 'Badlapur', 'Panvel', 'Navi Mumbai',
-    'Vashi', 'Nerul', 'Belapur', 'Kharghar', 'Kopar Khairane',
-    'Ghansoli', 'Airoli', 'Rabale', 'Mahape', 'Turbhe', 'Sanpada',
-    'Juhu Beach', 'Versova', 'Lokhandwala', 'Oshiwara', 'Goregaon East',
-    'Goregaon West', 'Malad East', 'Malad West', 'Borivali East',
-    'Borivali West', 'Kandivali East', 'Kandivali West'
+    'Kandivali', 'Dahisar', 'Thane', 'Dombivli', 'Kalyan', 'Navi Mumbai',
+    'Vashi', 'Nerul', 'Airoli', 'Powai', 'Worli', 'Colaba', 'Churchgate'
   ],
   'delhi': [
     'Connaught Place', 'Karol Bagh', 'Lajpat Nagar', 'Saket', 'Hauz Khas',
     'Dwarka', 'Rohini', 'Pitampura', 'Janakpuri', 'Rajouri Garden',
-    'Punjabi Bagh', 'Paschim Vihar', 'Uttam Nagar', 'Najafgarh',
-    'Mundka', 'Nangloi', 'Bawana', 'Alipur', 'Narela', 'Burari',
-    'Timarpur', 'Civil Lines', 'Kamla Nagar', 'Mukherjee Nagar',
-    'Model Town', 'Gulabi Bagh', 'Shalimar Bagh', 'Wazirpur',
-    'Ashok Vihar', 'Tri Nagar', 'Kirti Nagar', 'Moti Nagar',
-    'Ramesh Nagar', 'Patel Nagar', 'Rajendra Nagar', 'Pusa Road'
+    'Punjabi Bagh', 'Paschim Vihar', 'Uttam Nagar', 'New Delhi',
+    'Chanakyapuri', 'Diplomatic Enclave', 'India Gate', 'Rashtrapati Bhavan'
   ],
   'chennai': [
     'T Nagar', 'Anna Nagar', 'Adyar', 'Velachery', 'Tambaram',
-    'Chrompet', 'Pallavaram', 'Chengalpattu', 'Kanchipuram',
-    'Tiruvallur', 'Ambattur', 'Avadi', 'Maduravoyal', 'Valasaravakkam',
-    'Alandur', 'Poonamallee', 'Thiruninravur', 'Thiruvottiyur',
-    'Royapuram', 'Washermanpet', 'George Town', 'Triplicane',
-    'Mylapore', 'Nungambakkam', 'Kodambakkam', 'Ashok Nagar',
-    'Vadapalani', 'Saligramam', 'Virugambakkam', 'Koyambedu',
-    'Arumbakkam', 'Aminjikarai', 'Nelson Manickam Road', 'Choolaimedu'
+    'Chrompet', 'Pallavaram', 'Mylapore', 'Nungambakkam', 'Kodambakkam',
+    'Vadapalani', 'Koyambedu', 'Egmore', 'Chepauk', 'Besant Nagar'
   ],
   'kolkata': [
-    'Salt Lake', 'New Town', 'Rajarhat', 'Howrah', 'Serampore',
-    'Barrackpore', 'Barasat', 'Naihati', 'Kalyani', 'Nadia',
-    'Hooghly', 'Chandannagar', 'Chinsurah', 'Uttarpara', 'Bally',
-    'Belur', 'Liluah', 'Salkia', 'Shibpur', 'Garden Reach',
-    'Metiabruz', 'Taratala', 'Behala', 'Joka', 'Thakurpukur',
-    'Budge Budge', 'Maheshtala', 'Batanagar', 'Nangi', 'Pujali',
-    'Rajpur', 'Sonarpur', 'Narendrapur', 'Garia', 'Jadavpur',
-    'Tollygunge', 'Alipore', 'Ballygunge', 'Park Street', 'Camac Street'
+    'Salt Lake', 'New Town', 'Rajarhat', 'Howrah', 'Alipore',
+    'Ballygunge', 'Park Street', 'Esplanade', 'College Street', 'North Kolkata',
+    'South Kolkata', 'East Kolkata', 'West Kolkata', 'Behala', 'Jadavpur'
   ],
   'pune': [
     'Kothrud', 'Hadapsar', 'Wakad', 'Hinjewadi', 'Baner', 'Aundh',
-    'Pimple Saudagar', 'Pimple Nilakh', 'Pimple Gurav', 'Rahatani',
-    'Wagholi', 'Kharadi', 'Viman Nagar', 'Kalyani Nagar', 'Koregaon Park',
-    'Camp', 'Deccan', 'Shivaji Nagar', 'Sadashiv Peth', 'Swargate',
-    'Pune Station', 'Pimpri', 'Chinchwad', 'Nigdi', 'Akurdi',
-    'Ravet', 'Tathawade', 'Thergaon', 'Dapodi', 'Bopodi',
-    'Khadki', 'Aundh Road', 'Baner Road', 'Balewadi', 'Mahalunge'
+    'Viman Nagar', 'Kalyani Nagar', 'Koregaon Park', 'Camp', 'Deccan',
+    'Shivaji Nagar', 'Swargate', 'Pune Station', 'Pimpri', 'Chinchwad'
   ],
   'hyderabad': [
     'Gachibowli', 'Madhapur', 'Kondapur', 'Kukatpally', 'Miyapur',
-    'Bachupally', 'Nizampet', 'Pragathi Nagar', 'KPHB Colony',
-    'Manikonda', 'Nanakramguda', 'Financial District', 'Hitech City',
-    'Jubilee Hills', 'Banjara Hills', 'Film Nagar', 'Jubilee Hills Extension',
-    'Mehdipatnam', 'Tolichowki', 'Attapur', 'Rajendranagar', 'Shamshabad',
-    'Aramghar', 'Uppal', 'Habsiguda', 'Tarnaka', 'Malkajgiri',
-    'Secunderabad', 'Begumpet', 'Ameerpet', 'SR Nagar', 'Sanath Nagar',
-    'Erragadda', 'Borabanda', 'Yousufguda', 'Moosapet', 'Balanagar'
+    'Hitech City', 'Jubilee Hills', 'Banjara Hills', 'Mehdipatnam', 'Secunderabad',
+    'Begumpet', 'Ameerpet', 'Abids', 'Charminar', 'Toli Chowki'
   ]
 };
 
-async function searchNominatim(query, viewbox = null, bounded = 0) {
-  const params = {
-    q: query,
-    format: 'json',
-    limit: 20,
-    countrycodes: 'in',
-    addressdetails: 1,
-    extratags: 1
-  };
+// Helper function to search Nominatim API
+async function searchNominatim(query, limit = 20) {
+  try {
+    const params = {
+      q: query,
+      format: 'json',
+      limit: limit,
+      countrycodes: 'in',
+      addressdetails: 1,
+      extratags: 1,
+      'accept-language': 'en'
+    };
+
+    const response = await axios.get(`${NOMINATIM_BASE_URL}/search`, {
+      params,
+      headers: {
+        'User-Agent': 'Curator/1.0 (your-email@example.com)'
+      },
+      timeout: 10000
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Nominatim search error:", error.message);
+    return [];
+  }
+}
+
+// Helper function to get details from Nominatim
+async function getNominatimDetails(lat, lon) {
+  try {
+    const response = await axios.get(`${NOMINATIM_BASE_URL}/reverse`, {
+      params: {
+        lat,
+        lon,
+        format: 'json',
+        addressdetails: 1,
+        'accept-language': 'en'
+      },
+      headers: {
+        'User-Agent': 'Curator/1.0 (your-email@example.com)'
+      },
+      timeout: 10000
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Nominatim reverse error:", error.message);
+    return null;
+  }
+}
+
+// Helper to determine location type from Nominatim address
+function getLocationType(address) {
+  if (!address) return 'locality';
   
-  if (viewbox) {
-    params.viewbox = viewbox;
-    params.bounded = bounded;
+  const type = address.type || address.class || '';
+  const osmType = address.osm_type || '';
+  
+  if (type === 'administrative' || type === 'boundary') {
+    if (address.admin_level === '4' || address.admin_level === '6') {
+      return 'district';
+    }
+    return 'city';
   }
   
-  const response = await axios.get(`${NOMINATIM_BASE_URL}/search`, {
-    params,
-    headers: {
-      'User-Agent': 'Curator/1.0'
-    }
-  });
-  return response.data;
+  if (type === 'city' || type === 'town' || type === 'village') {
+    return 'city';
+  }
+  
+  if (type === 'suburb' || type === 'quarter' || type === 'neighbourhood' || type === 'locality') {
+    return 'locality';
+  }
+  
+  return 'locality';
 }
 
-async function queryNominatimReverse(lat, lon) {
-  const response = await axios.get(`${NOMINATIM_BASE_URL}/reverse`, {
-    params: {
-      lat,
-      lon,
-      format: 'json',
-      addressdetails: 1
-    },
-    headers: {
-      'User-Agent': 'Curator/1.0'
-    }
-  });
-  return response.data;
+// Helper to extract city from Nominatim result
+function extractCityFromResult(result) {
+  const address = result.address || {};
+  return address.city || address.town || address.village || address.county || '';
 }
 
+// Helper to extract district from Nominatim result
+function extractDistrictFromResult(result) {
+  const address = result.address || {};
+  return address.state_district || address.district || address.county || '';
+}
+
+// Search endpoint - uses Nominatim for all Indian cities, localities, districts
 router.get("/search", async (req, res) => {
   try {
     const { q } = req.query;
@@ -237,10 +160,38 @@ router.get("/search", async (req, res) => {
       return res.json([]);
     }
 
-    const queryLower = q.toLowerCase().trim();
+    const query = q.trim();
     const allResults = [];
+
+    // Search Nominatim for Indian locations
+    const nominatimResults = await searchNominatim(query + ", India", 20);
     
-    // ONLY search in CITY_LOCALITIES - no external API
+    for (const result of nominatimResults) {
+      const address = result.address || {};
+      const locationType = getLocationType(address);
+      
+      // Only include cities, localities, and districts
+      if (['city', 'locality', 'district'].includes(locationType)) {
+        const name = result.display_name?.split(',')[0]?.trim() || result.name || '';
+        const city = extractCityFromResult(result);
+        const district = extractDistrictFromResult(result);
+        
+        if (name) {
+          allResults.push({
+            name: name,
+            type: locationType,
+            city: city,
+            district: district,
+            displayName: result.display_name,
+            lat: result.lat,
+            lon: result.lon
+          });
+        }
+      }
+    }
+
+    // Also search in CITY_LOCALITIES as fallback
+    const queryLower = query.toLowerCase();
     for (const [cityKey, localities] of Object.entries(CITY_LOCALITIES)) {
       // Match city name
       if (cityKey.includes(queryLower) || CITY_ALIASES[cityKey]?.some(alias => alias.includes(queryLower))) {
@@ -273,6 +224,12 @@ router.get("/search", async (req, res) => {
       return true;
     });
 
+    // Sort: cities first, then localities, then districts
+    uniqueResults.sort((a, b) => {
+      const typeOrder = { 'city': 0, 'locality': 1, 'district': 2 };
+      return (typeOrder[a.type] || 3) - (typeOrder[b.type] || 3);
+    });
+
     res.json(uniqueResults.slice(0, 15));
 
   } catch (error) {
@@ -281,6 +238,7 @@ router.get("/search", async (req, res) => {
   }
 });
 
+// Get location details including pincode
 router.get("/details", async (req, res) => {
   try {
     const { name, city } = req.query;
@@ -289,24 +247,47 @@ router.get("/details", async (req, res) => {
       return res.json({});
     }
 
-    // Return basic info - pincode would need external API or a pincode database
-    // For now, return empty pincode as CITY_LOCALITIES doesn't include pincodes
-    const locationData = {
+    // Search Nominatim for the location
+    const searchQuery = city ? `${name}, ${city}, India` : `${name}, India`;
+    const results = await searchNominatim(searchQuery, 5);
+    
+    if (results && results.length > 0) {
+      const result = results[0];
+      const address = result.address || {};
+      
+      const locationData = {
+        name: name,
+        displayName: result.display_name,
+        pincode: address.postcode || '',
+        city: address.city || address.town || address.village || city || '',
+        state: address.state || '',
+        district: address.state_district || address.district || '',
+        type: getLocationType(address),
+        lat: result.lat,
+        lon: result.lon
+      };
+      
+      return res.json(locationData);
+    }
+
+    // Fallback response
+    res.json({
       name: name,
       displayName: `${name}${city ? ', ' + city : ''}, India`,
-      pincode: '',  // Would need a pincode database or external API
+      pincode: '',
       city: city || '',
       state: '',
+      district: '',
       type: 'locality'
-    };
+    });
 
-    res.json(locationData);
   } catch (error) {
     console.error("Location details error:", error.message);
     res.json({});
   }
 });
 
+// Get areas within a city
 router.get("/areas", async (req, res) => {
   try {
     const { city } = req.query;
@@ -316,34 +297,70 @@ router.get("/areas", async (req, res) => {
     }
 
     const cityLower = city.toLowerCase().trim();
+    const areas = [];
+
+    // First, try to get localities from Nominatim
+    const searchQuery = `${city}, India`;
+    const cityResults = await searchNominatim(searchQuery, 1);
     
-    // ONLY use CITY_LOCALITIES - no external API calls
-    let fallbackKey = cityLower;
-    if (!CITY_LOCALITIES[fallbackKey]) {
-      for (const [key, aliases] of Object.entries(CITY_ALIASES)) {
-        if (aliases.some(alias => cityLower.includes(alias))) {
-          fallbackKey = key;
-          break;
+    if (cityResults && cityResults.length > 0) {
+      const cityResult = cityResults[0];
+      const cityLat = cityResult.lat;
+      const cityLon = cityResult.lon;
+      
+      // Search for localities around the city center
+      // Using a bounding box around the city
+      const viewbox = `${parseFloat(cityLon) - 0.5},${parseFloat(cityLat) + 0.5},${parseFloat(cityLon) + 0.5},${parseFloat(cityLat) - 0.5}`;
+      
+      const localityResults = await searchNominatim(city, 30);
+      
+      for (const result of localityResults) {
+        const address = result.address || {};
+        const locationType = getLocationType(address);
+        
+        if (locationType === 'locality' || locationType === 'suburb' || locationType === 'quarter') {
+          const name = result.display_name?.split(',')[0]?.trim() || result.name || '';
+          if (name && name.toLowerCase() !== cityLower) {
+            areas.push({
+              name: name,
+              type: 'locality',
+              city: city,
+              displayName: `${name}, ${city}`
+            });
+          }
         }
       }
     }
-    
-    // Convert 'bangalore' to 'bengaluru'
-    if (fallbackKey === 'bangalore' && CITY_LOCALITIES['bengaluru']) {
-      fallbackKey = 'bengaluru';
-    }
 
-    const areas = [];
-    
-    if (CITY_LOCALITIES[fallbackKey]) {
-      CITY_LOCALITIES[fallbackKey].forEach(locality => {
-        areas.push({
-          name: locality,
-          type: 'locality',
-          city: city,
-          displayName: `${locality}, ${city}`
-        });
-      });
+    // If Nominatim didn't return enough results, use CITY_LOCALITIES as fallback
+    if (areas.length < 10) {
+      let fallbackKey = cityLower;
+      if (!CITY_LOCALITIES[fallbackKey]) {
+        for (const [key, aliases] of Object.entries(CITY_ALIASES)) {
+          if (aliases.some(alias => cityLower.includes(alias))) {
+            fallbackKey = key;
+            break;
+          }
+        }
+      }
+
+      // Convert 'bangalore' to 'bengaluru'
+      if (fallbackKey === 'bangalore' && CITY_LOCALITIES['bengaluru']) {
+        fallbackKey = 'bengaluru';
+      }
+
+      if (CITY_LOCALITIES[fallbackKey]) {
+        for (const locality of CITY_LOCALITIES[fallbackKey]) {
+          if (!areas.find(a => a.name.toLowerCase() === locality.toLowerCase())) {
+            areas.push({
+              name: locality,
+              type: 'locality',
+              city: city,
+              displayName: `${locality}, ${city}`
+            });
+          }
+        }
+      }
     }
 
     res.json(areas.slice(0, 30));
