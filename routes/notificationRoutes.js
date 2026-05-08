@@ -74,7 +74,8 @@ router.get("/user/:userId", async (req, res) => {
       notificationRecipientId: userId,
       $or: [
         { notificationForStoreOwner: true },
-        { notificationType: "quotation" }
+        { notificationType: "quotation" },
+        { notificationType: "quotation_accepted" }
       ]
     })
     .populate("notificationSenderId", "firstName lastName")
@@ -96,7 +97,8 @@ router.get("/user/:userId/unread-count", async (req, res) => {
       notificationRecipientId: userId,
       $or: [
         { notificationForStoreOwner: true },
-        { notificationType: "quotation" }
+        { notificationType: "quotation" },
+        { notificationType: "quotation_accepted" }
       ],
       isNotificationRead: false
     });
@@ -133,7 +135,8 @@ router.put("/user/:userId/read-all", async (req, res) => {
         notificationRecipientId: userId,
         $or: [
           { notificationForStoreOwner: true },
-          { notificationType: "quotation" }
+          { notificationType: "quotation" },
+          { notificationType: "quotation_accepted" }
         ],
         isNotificationRead: false
       },

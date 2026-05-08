@@ -27,6 +27,14 @@ exports.createRequirement = async (req, res) => {
       });
     }
 
+    // Check if the user has already created 10 requirements
+    const userRequirementsCount = await Requirement.countDocuments({ createdBy, isDeleted: false });
+    if (userRequirementsCount >= 10) {
+      return res.status(400).json({
+        message: "You can only add up to 10 requirements."
+      });
+    }
+
     const newRequirement = new Requirement({
       reqCategory,
       reqTitle,
