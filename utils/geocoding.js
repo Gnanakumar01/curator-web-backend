@@ -26,11 +26,11 @@ async function geocodeAddress(address) {
 
     if (response.data && response.data.length > 0) {
       const result = response.data[0];
-      return {
-        latitude: parseFloat(result.lat),
-        longitude: parseFloat(result.lon),
-        displayName: result.display_name
-      };
+      const lat = result.lat != null ? parseFloat(result.lat) : null;
+      const lon = result.lon != null ? parseFloat(result.lon) : null;
+      if (lat != null && lon != null && !isNaN(lat) && !isNaN(lon)) {
+        return { latitude: lat, longitude: lon, displayName: result.display_name };
+      }
     }
 
     return { latitude: null, longitude: null, displayName: null };

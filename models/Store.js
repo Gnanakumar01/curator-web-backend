@@ -18,6 +18,19 @@ const storeSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
+  // Geospatial field for location-based queries
+  location: {
+    type: {
+      type: String,
+      enum: ["Point"],
+      default: "Point"
+    },
+    coordinates: {
+      type: [Number],
+      default: [null, null] // [longitude, latitude]
+    }
+  },
+
   storeRatings: {
     type: Number,
     default: 0
@@ -65,7 +78,23 @@ const storeSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   }
-
 }, { timestamps: true });
+
+// 2dsphere index for geospatial queries
+storeSchema.index({ location: "2dsphere" });
+
+// Pre-save hook to keep location in sync with latitude/longitude
+storeSchema.pre("save", function(next) {
+  // Check for null/undefined (0 is valid)
+  if (this.latitude != null && this.longitude != null) {
+    this.location = {
+      type: "Point",
+      coordinates: [this.longitude, this.latitude]
+    };
+  } else {
+    this.location = undefined;
+  }
+  next();
+});
 
 module.exports = mongoose.model("Store", storeSchema);

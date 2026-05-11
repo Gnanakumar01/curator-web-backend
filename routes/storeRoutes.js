@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Store = require("../models/Store");
+const mongoose = require("mongoose");
 const { geocodeAddress, buildFullAddress } = require("../utils/geocoding");
 
 // Helper function to extract coordinates from Google Maps URL
@@ -50,7 +51,11 @@ router.post("/create", async (req, res) => {
       return res.status(400).json({ message: "No data provided. Please fill the form and submit." });
     }
 
-    const { _id, ...storeData } = req.body;
+     const { _id, ...storeData } = req.body;
+     const storeOwner = storeData.storeOwner || storeData.ownerId || null;
+     if (storeOwner && !mongoose.Types.ObjectId.isValid(storeOwner)) {
+       return res.status(400).json({ message: "Invalid store owner ID" });
+     }
 
     // Extract coordinates: first check if provided directly, otherwise try to extract from URL, then use Nominatim as fallback
     let latitude = null;
@@ -86,7 +91,11 @@ router.post("/create", async (req, res) => {
       }
     }
 
-    const finalStoreData = {
+     // Sanitize NaN coordinates
+     if (typeof latitude === 'number' && isNaN(latitude)) latitude = null;
+     if (typeof longitude === 'number' && isNaN(longitude)) longitude = null;
+
+     const finalStoreData = {
       storeName:        storeData.storeName || storeData.name || storeData.store_name,
       storeAddressLine: storeData.storeAddressLine || storeData.address || storeData.addressLine,
       storeLocality:    storeData.storeLocality || storeData.locality || storeData.area,
@@ -104,7 +113,7 @@ router.post("/create", async (req, res) => {
       storeImage:       storeData.storeImage || storeData.image || storeData.store_image || storeData.imageUrl,
       storeImages:      storeData.storeImages || [],
       storeAttachedFiles: storeData.storeAttachedFiles || [],
-      storeOwner:       storeData.storeOwner || storeData.ownerId || null
+       storeOwner: storeOwner
     };
 
     console.log("Final store data to save:", finalStoreData);
@@ -145,7 +154,11 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "No data provided. Please fill the form and submit." });
     }
 
-    const { _id, ...storeData } = req.body;
+     const { _id, ...storeData } = req.body;
+     const storeOwner = storeData.storeOwner || storeData.ownerId || null;
+     if (storeOwner && !mongoose.Types.ObjectId.isValid(storeOwner)) {
+       return res.status(400).json({ message: "Invalid store owner ID" });
+     }
 
     // Extract coordinates: first check if provided directly, otherwise try to extract from URL, then use Nominatim as fallback
     let latitude = null;
@@ -181,7 +194,11 @@ router.post("/", async (req, res) => {
       }
     }
 
-    const finalStoreData = {
+     // Sanitize NaN coordinates
+     if (typeof latitude === 'number' && isNaN(latitude)) latitude = null;
+     if (typeof longitude === 'number' && isNaN(longitude)) longitude = null;
+
+     const finalStoreData = {
       storeName:        storeData.storeName || storeData.name || storeData.store_name,
       storeAddressLine: storeData.storeAddressLine || storeData.address || storeData.addressLine,
       storeLocality:    storeData.storeLocality || storeData.locality || storeData.area,
@@ -199,7 +216,7 @@ router.post("/", async (req, res) => {
       storeImage:       storeData.storeImage || storeData.image || storeData.store_image || storeData.imageUrl,
       storeImages:      storeData.storeImages || [],
       storeAttachedFiles: storeData.storeAttachedFiles || [],
-      storeOwner:       storeData.storeOwner || storeData.ownerId || null
+       storeOwner: storeOwner
     };
 
     console.log("Final store data to save (root):", finalStoreData);
@@ -231,14 +248,38 @@ router.post("/", async (req, res) => {
 
 /*
 GET ALL STORES
+Supports optional query parameters:
+- lat: latitude of user location
+- lng: longitude of user location  
+- radius: radius in kilometers (default: 5)
 */
 router.get("/", async (req, res) => {
 
   try {
+    const { lat, lng, radius } = req.query;
+    let query = { isDeleted: { $ne: true } };
 
-    const stores = await Store.find({
-      isDeleted: { $ne: true }
-    });
+    // If location parameters provided, filter by radius using geospatial query
+    if (lat && lng && radius) {
+      const latitude = parseFloat(lat);
+      const longitude = parseFloat(lng);
+      const radiusKm = parseFloat(radius);
+
+      if (!isNaN(latitude) && !isNaN(longitude) && !isNaN(radiusKm)) {
+        // Convert km to radians for MongoDB's $geoWithin with $centerSphere
+        // Earth radius ≈ 6371 km, so radius in radians = radiusKm / 6371
+        const radiusInRadians = radiusKm / 6371;
+
+        query.location = {
+          $geoWithin: {
+            $centerSphere: [[longitude, latitude], radiusInRadians]
+          }
+        };
+      }
+    }
+
+    console.log("Store query:", JSON.stringify(query));
+    const stores = await Store.find(query);
 
     console.log("Found stores count:", stores.length);
     res.json(stores);
@@ -332,11 +373,14 @@ router.put("/:id", async (req, res) => {
 
   try {
 
-    const store = await Store.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+    const store = await Store.findById(req.params.id);
+    if (!store) {
+      return res.status(404).json({ message: "Store not found" });
+    }
+
+    // Update all provided fields
+    Object.assign(store, req.body);
+    await store.save(); // pre-save hook will update location from lat/lng
 
     res.json(store);
 
