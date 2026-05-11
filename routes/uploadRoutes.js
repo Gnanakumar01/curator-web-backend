@@ -4,6 +4,11 @@ const multer = require("multer");
 const cloudinary = require("../config/cloudinary");
 const { Readable } = require("stream");
 
+// Wrapper for async route handlers to catch errors properly in Express 5.x
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
+
 // Use memory storage to avoid writing files to disk
 const storage = multer.memoryStorage();
 
@@ -174,83 +179,65 @@ const uploadToCloudinary = async (file) => {
 /**
  * Single file upload endpoint
  */
-router.post("/", upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "No file uploaded",
-      });
-    }
-
-    const cloudinaryResult = await uploadToCloudinary(req.file);
-
-    res.json({
-      success: true,
-      fileUrl: cloudinaryResult.secure_url || cloudinaryResult.url,
-      filename: cloudinaryResult.public_id,
-      originalName: req.file.originalname,
-      format: cloudinaryResult.format,
-      resourceType: cloudinaryResult.resource_type,
-      bytes: cloudinaryResult.bytes,
-    });
-
-  } catch (error) {
-    console.error("Upload error:", error);
-    res.status(500).json({
+router.post("/", upload.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
       success: false,
-      message: error.message || "Failed to upload file",
+      message: "No file uploaded",
     });
   }
-});
+
+  const cloudinaryResult = await uploadToCloudinary(req.file);
+
+  res.json({
+    success: true,
+    fileUrl: cloudinaryResult.secure_url || cloudinaryResult.url,
+    filename: cloudinaryResult.public_id,
+    originalName: req.file.originalname,
+    format: cloudinaryResult.format,
+    resourceType: cloudinaryResult.resource_type,
+    bytes: cloudinaryResult.bytes,
+  });
+}));
 
 /**
  * Multiple files upload endpoint
  */
-router.post("/multiple", upload.array('files', 10), async (req, res) => {
-  try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No files uploaded",
-      });
-    }
-
-    const uploadPromises = req.files.map((file) => uploadToCloudinary(file));
-    const results = await Promise.allSettled(uploadPromises);
-
-    const successful = [];
-    const failed = [];
-
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        successful.push({
-          fileUrl: result.value.secure_url || result.value.url,
-          filename: result.value.public_id,
-          originalName: req.files[index].originalname,
-        });
-      } else {
-        failed.push({
-          fileName: req.files[index].originalname,
-          error: result.reason.message,
-        });
-      }
-    });
-
-    res.json({
-      success: failed.length === 0,
-      successful,
-      failed,
-      message: failed.length > 0 ? `${failed.length} file(s) failed to upload` : "All files uploaded successfully",
-    });
-
-  } catch (error) {
-    console.error("Multiple upload error:", error);
-    res.status(500).json({
+router.post("/multiple", upload.array('files', 10), asyncHandler(async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({
       success: false,
-      message: error.message || "Failed to upload files",
+      message: "No files uploaded",
     });
   }
-});
+
+  const uploadPromises = req.files.map((file) => uploadToCloudinary(file));
+  const results = await Promise.allSettled(uploadPromises);
+
+  const successful = [];
+  const failed = [];
+
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      successful.push({
+        fileUrl: result.value.secure_url || result.value.url,
+        filename: result.value.public_id,
+        originalName: req.files[index].originalname,
+      });
+    } else {
+      failed.push({
+        fileName: req.files[index].originalname,
+        error: result.reason.message,
+      });
+    }
+  });
+
+  res.json({
+    success: failed.length === 0,
+    successful,
+    failed,
+    message: failed.length > 0 ? `${failed.length} file(s) failed to upload` : "All files uploaded successfully",
+  });
+}));
 
 module.exports = router;

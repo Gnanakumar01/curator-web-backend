@@ -84,9 +84,6 @@ if (!fs.existsSync('uploads')) {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Add upload route
-const uploadRoutes = require("./routes/uploadRoutes");
-app.use("/api/upload", uploadRoutes);
-
 app.use("/api/upload", require("./routes/uploadRoutes"));
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/users", require("./routes/userRoutes"));
@@ -95,6 +92,17 @@ app.use("/api/requirements", require("./routes/requirementRoutes"));
 app.use("/api/responses", require("./routes/responseRoutes"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
 app.use("/api/locations", require("./routes/locationRoutes"));
+
+// Error handling middleware for Express 5.x
+app.use((err, req, res, next) => {
+  console.error("Error handler:", err);
+  if (!res.headersSent) {
+    res.status(500).json({
+      message: "Internal server error",
+      error: err.message
+    });
+  }
+});
 
 const PORT = process.env.PORT || 5000;
 

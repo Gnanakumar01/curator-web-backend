@@ -84,7 +84,8 @@ const storeSchema = new mongoose.Schema({
 storeSchema.index({ location: "2dsphere" });
 
 // Pre-save hook to keep location in sync with latitude/longitude
-storeSchema.pre("save", function(next) {
+// Using function syntax to preserve 'this' context
+storeSchema.pre("save", function() {
   // Check for null/undefined (0 is valid)
   if (this.latitude != null && this.longitude != null) {
     this.location = {
@@ -94,7 +95,8 @@ storeSchema.pre("save", function(next) {
   } else {
     this.location = undefined;
   }
-  next();
+  // In Mongoose 9.x, we don't need to call next() explicitly
+  // The hook will complete automatically
 });
 
 module.exports = mongoose.model("Store", storeSchema);
