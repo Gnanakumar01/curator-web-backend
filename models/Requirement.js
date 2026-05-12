@@ -7,7 +7,8 @@ const requirementSchema = new mongoose.Schema({
   reqDocs: [{
     fileName: String,
     fileType: String,
-    data: String // Base64 encoded file data
+    url: String,        // Cloudinary URL
+    public_id: String   // Cloudinary public_id for deletion
   }],
   reqDesc: String,
   reqAudio: String,
@@ -54,5 +55,15 @@ const requirementSchema = new mongoose.Schema({
   ]
 
 }, { timestamps: true });
+
+// Indexes for better query performance
+requirementSchema.index({ createdBy: 1 });
+requirementSchema.index({ reqCategory: 1 });
+requirementSchema.index({ targetLocation: 1 });
+requirementSchema.index({ city: 1 });
+requirementSchema.index({ isDeleted: 1 });
+requirementSchema.index({ reqStatus: 1 });
+// Compound index for common queries
+requirementSchema.index({ reqCategory: 1, isDeleted: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Requirement", requirementSchema);

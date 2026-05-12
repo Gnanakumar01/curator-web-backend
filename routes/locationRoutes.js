@@ -4,10 +4,60 @@ const axios = require("axios");
 
 const NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org";
 
+// Load city localities from external JSON file (reduces memory usage)
+const CITY_LOCALITIES = require("../data/cityLocalities.json");
+
 const HEADERS = {
   "User-Agent": "Curator/1.0 (sgnanakumar929@gmail.com)", 
   "Accept-Language": "en",
 };
+
+// ─── In-memory cache for Nominatim responses (5 minute TTL) ───────────────────
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const cache = new Map();
+
+function getCacheKey(url, params) {
+  return `${url}?${new URLSearchParams(params).toString()}`;
+}
+
+function getCached(key) {
+  const item = cache.get(key);
+  if (item && Date.now() - item.timestamp < CACHE_TTL) {
+    return item.data;
+  }
+  cache.delete(key);
+  return null;
+}
+
+function setCache(key, data) {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
+// Clean up old cache entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, item] of cache.entries()) {
+    if (now - item.timestamp > CACHE_TTL) {
+      cache.delete(key);
+    }
+  }
+}, CACHE_TTL);
+
+// ─── Rate limiting: minimum delay between requests (1 second) ───────────────────
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 1000; // 1 second
+
+async function rateLimitedRequest(url, config) {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  
+  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+    await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest));
+  }
+  
+  lastRequestTime = Date.now();
+  return axios.get(url, config);
+}
 
 // ─── ROOT CAUSE FIX 1 ────────────────────────────────────────────────────────
 // getLocationType() was reading address.type but Nominatim puts type/class on
@@ -62,35 +112,45 @@ function extractDistrict(address = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function searchNominatim(query, options = {}) {
   const { limit = 20, structured = null } = options;
-  try {
-    const params = structured
-      ? {
-          ...structured,
-          format: "json",
-          limit,
-          countrycodes: "in",
-          addressdetails: 1,
-          extratags: 1,
-          "accept-language": "en",
-          layer: "address", // only inhabited places, not POIs or roads
-        }
-      : {
-          q: query,
-          format: "json",
-          limit,
-          countrycodes: "in",
-          addressdetails: 1,
-          extratags: 1,
-          "accept-language": "en",
-          layer: "address", // KEY FIX: filters out roads, buildings, POIs
-        };
+  
+  const params = structured
+    ? {
+        ...structured,
+        format: "json",
+        limit,
+        countrycodes: "in",
+        addressdetails: 1,
+        extratags: 1,
+        "accept-language": "en",
+        layer: "address", // only inhabited places, not POIs or roads
+      }
+    : {
+        q: query,
+        format: "json",
+        limit,
+        countrycodes: "in",
+        addressdetails: 1,
+        extratags: 1,
+        "accept-language": "en",
+        layer: "address", // KEY FIX: filters out roads, buildings, POIs
+      };
 
-    const response = await axios.get(`${NOMINATIM_BASE_URL}/search`, {
+  // Check cache first
+  const cacheKey = getCacheKey(`${NOMINATIM_BASE_URL}/search`, params);
+  const cached = getCached(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await rateLimitedRequest(`${NOMINATIM_BASE_URL}/search`, {
       params,
       headers: HEADERS,
       timeout: 8000,
     });
-    return response.data || [];
+    const data = response.data || [];
+    setCache(cacheKey, data);
+    return data;
   } catch (err) {
     console.error("Nominatim search error:", err.message);
     return [];
@@ -98,118 +158,36 @@ async function searchNominatim(query, options = {}) {
 }
 
 async function reverseNominatim(lat, lon) {
+  const params = {
+    lat,
+    lon,
+    format: "json",
+    addressdetails: 1,
+    zoom: 14, // zoom 14 = suburb/neighbourhood level
+    "accept-language": "en",
+  };
+
+  // Check cache first
+  const cacheKey = getCacheKey(`${NOMINATIM_BASE_URL}/reverse`, params);
+  const cached = getCached(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   try {
-    const response = await axios.get(`${NOMINATIM_BASE_URL}/reverse`, {
-      params: {
-        lat,
-        lon,
-        format: "json",
-        addressdetails: 1,
-        zoom: 14, // zoom 14 = suburb/neighbourhood level
-        "accept-language": "en",
-      },
+    const response = await rateLimitedRequest(`${NOMINATIM_BASE_URL}/reverse`, {
+      params,
       headers: HEADERS,
       timeout: 8000,
     });
-    return response.data || null;
+    const data = response.data || null;
+    setCache(cacheKey, data);
+    return data;
   } catch (err) {
     console.error("Nominatim reverse error:", err.message);
     return null;
   }
 }
-
-// ─── Expanded fallback data (used when Nominatim returns < 5 results) ─────────
-const CITY_LOCALITIES = {
-  bengaluru: [
-    "BTM Layout","Jayanagar","Madiwala","Koramangala","Indiranagar","Malleshwaram",
-    "Rajajinagar","Vijayanagar","Whitefield","Marathahalli","HSR Layout","JP Nagar",
-    "Banashankari","Basavanagudi","Girinagar","Yelahanka","Hebbal","Kalyan Nagar",
-    "Kammanahalli","Ulsoor","Domlur","Electronic City","Sarjapur Road","Bellandur",
-    "Brookefield","Kadugodi","Mahadevapura","Ramamurthy Nagar","KR Puram",
-    "Horamavu","Banaswadi","Lingarajapuram","Frazer Town","Cox Town","Ulsoor",
-    "Shivaji Nagar","Cubbon Park","MG Road","Brigade Road","Jayanagar","RT Nagar",
-    "Sadashivanagar","Dollars Colony","Jalahalli","Peenya","Yeshwanthpur",
-    "Tumkur Road","Nagarbhavi","Kengeri","Uttarahalli","Gottigere","Hulimavu",
-    "Arekere","Begur","Harlur","Haralur","Gunjur","Varthur","Hopefarm",
-    "NRI Layout","Rachenahalli","Thanisandra","Kogilu","Hennur","Bettahalasur",
-  ],
-  mumbai: [
-    "Andheri","Bandra","Juhu","Borivali","Malad","Goregaon","Kandivali","Dahisar",
-    "Thane","Dombivli","Kalyan","Navi Mumbai","Vashi","Nerul","Airoli","Powai",
-    "Worli","Colaba","Churchgate","Dadar","Parel","Lower Parel","Kurla","Ghatkopar",
-    "Vikhroli","Bhandup","Mulund","Nahur","Kanjurmarg","Sion","Chembur","Govandi",
-    "Mankhurd","Trombay","Chunabhatti","Dharavi","Mahim","Matunga","Wadala",
-    "Aarey Colony","Santacruz","Khar","Ville Parle","Jogeshwari","Oshiwara",
-    "Lokhandwala","Versova","Oshiwara","Mira Road","Bhayander","Naigaon","Vasai",
-  ],
-  delhi: [
-    "Connaught Place","Karol Bagh","Lajpat Nagar","Saket","Hauz Khas","Dwarka",
-    "Rohini","Pitampura","Janakpuri","Rajouri Garden","Punjabi Bagh","Paschim Vihar",
-    "Uttam Nagar","Chanakyapuri","India Gate","Rashtrapati Bhavan","Vasant Kunj",
-    "Vasant Vihar","RK Puram","Safdarjung Enclave","Defence Colony","Jangpura",
-    "Bhogal","Nizamuddin","Okhla","Jasola","Sarita Vihar","Govindpuri","Kalkaji",
-    "Malviya Nagar","Sheikh Sarai","Begumpur","Sangam Vihar","Pul Prahladpur",
-    "Alaknanda","Greater Kailash","CR Park","Panchsheel","Munirka","Arjangarh",
-    "Chattarpur","Mehrauli","Bijwasan","Dwarka Mor","Uttam Nagar","Bindapur",
-    "Nawada","Hastsal","Vikaspuri","Subhash Nagar","Tilak Nagar","Khyala",
-  ],
-  chennai: [
-    "T Nagar","Anna Nagar","Adyar","Velachery","Tambaram","Chrompet","Pallavaram",
-    "Mylapore","Nungambakkam","Kodambakkam","Vadapalani","Koyambedu","Egmore",
-    "Chepauk","Besant Nagar","Thiruvanmiyur","Sholinganallur","Perungudi","Thoraipakkam",
-    "Perumbakkam","Medavakkam","Madambakkam","Selaiyur","Chitlapakkam","Mudichur",
-    "Urapakkam","Guduvanchery","Mahindra City","Padappai","Manimangalam","Kundrathur",
-    "Porur","Valasaravakkam","Alwarthirunagar","Virugambakkam","Arumbakkam",
-    "Mogappair","Ambattur","Avadi","Villivakkam","Perambur","Kolathur","Villapuram",
-  ],
-  kolkata: [
-    "Salt Lake","New Town","Rajarhat","Howrah","Alipore","Ballygunge","Park Street",
-    "Esplanade","College Street","Behala","Jadavpur","Dum Dum","Baranagar","Serampore",
-    "Bally","Belur","Liluah","Shibpur","Santragachi","Panchla","Domjur","Andul",
-    "Rishra","Konnagar","Uttarpara","Baidyabati","Chandannagar","Bhadreswar",
-    "Champdani","Uttarpara","Titagarh","Barrackpore","Naihati","Halisahar",
-    "Kalyani","Haringhata","Chakdaha","Bidhannagar","Kestopur","Teghoria",
-  ],
-  pune: [
-    "Kothrud","Hadapsar","Wakad","Hinjewadi","Baner","Aundh","Viman Nagar",
-    "Kalyani Nagar","Koregaon Park","Camp","Deccan","Shivaji Nagar","Swargate",
-    "Pimpri","Chinchwad","Nigdi","Akurdi","Bhosari","Moshi","Chakan","Talegaon",
-    "Lonavala","Khadki","Dapodi","Sangvi","Rahatani","Vishrantwadi","Lohegaon",
-    "Wagholi","Kharadi","Mundhwa","Magarpatta","Undri","Kondhwa","Bibwewadi",
-    "Sahakarnagar","Katraj","Dhayari","Narhe","Ambegaon","Warje","Bavdhan",
-  ],
-  hyderabad: [
-    "Gachibowli","Madhapur","Kondapur","Kukatpally","Miyapur","Hitech City",
-    "Jubilee Hills","Banjara Hills","Mehdipatnam","Secunderabad","Begumpet",
-    "Ameerpet","Abids","Charminar","Toli Chowki","Manikonda","Narsingi","Kokapet",
-    "Tellapur","Khajaguda","Puppalaguda","Rajendranagar","Shamshabad","LB Nagar",
-    "Uppal","Nacharam","Mallapur","Boduppal","Peerzadiguda","Ghatkesar","Medchal",
-    "Kompally","Alwal","Malkajgiri","Trimulgherry","Bowenpally","Yapral","Dammaiguda",
-  ],
-  ahmedabad: [
-    "Navrangpura","Satellite","Vastrapur","Bodakdev","Thaltej","Prahlad Nagar",
-    "Maninagar","Isanpur","Vatva","Odhav","Naroda","Bapunagar","Amraiwadi",
-    "Nikol","Vastral","Chandkheda","Motera","Sabarmati","Gota","Tragad",
-    "Ranip","Nava Vadaj","Memnagar","Gurukul","Drive-In Road","Judges Bungalow",
-    "SG Highway","Sindhu Bhavan","Science City","Sola","Shela","Ghuma",
-  ],
-  jaipur: [
-    "Malviya Nagar","Vaishali Nagar","Mansarovar","Raja Park","Bapu Nagar",
-    "Sitapura","Sanganer","Pratap Nagar","Jagatpura","Durgapura","Tonk Road",
-    "Ajmer Road","Gopalpura","Sodala","Shastri Nagar","Civil Lines","MI Road",
-    "Sindhi Camp","Walled City","Amer","Jhotwara","Vidyadhar Nagar","Nirman Nagar",
-  ],
-  surat: [
-    "Adajan","Vesu","Pal","Althan","Dumas","Bhatar","Katargam","Varachha",
-    "Limbayat","Majura Gate","Ring Road","Rander","Sachin","Hazira","Magdalla",
-    "Ichchhapor","Kamrej","Bardoli","Navsari Road","City Light","Ghod Dod Road",
-  ],
-  lucknow: [
-    "Hazratganj","Gomti Nagar","Indira Nagar","Alambagh","Aliganj","Vikas Nagar",
-    "Janakipuram","Chinhat","Shaheed Path","Mahanagar","Kapoorthala","Butler Palace",
-    "Jankipuram","Kursi Road","Sultanpur Road","Faizabad Road","Sitapur Road",
-  ],
-};
 
 // ─── /search endpoint ──────────────────────────────────────────────────────────
 router.get("/search", async (req, res) => {

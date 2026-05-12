@@ -8,29 +8,51 @@ router.post("/create", async (req, res) => {
   try {
     const response = new Response(req.body);
     await response.save();
-    
+
     const io = req.app.get("io");
     const requirement = await Requirement.findById(req.body.requirementId);
-    
+
     if (requirement && requirement.createdBy) {
       const store = await Store.findById(req.body.storeId);
       const storeName = store?.storeName || "A store";
-      
+
+      const notificationMessage = `${storeName} sent a quotation for "${requirement.reqTitle}"`;
+
+      // Persist notification to database
+      const notificationRecord = new Response({
+        requirementId: req.body.requirementId,
+        storeId: null,
+        price: 0,
+        deliveryTime: 0,
+        deliveryTimeUnit: "days",
+        message: notificationMessage,
+        status: "Notification",
+        notificationForStoreOwner: false,
+        notificationTitle: "New Quotation Received",
+        notificationMessage: notificationMessage,
+        notificationType: "quotation",
+        isNotificationRead: false,
+        notificationRecipientId: requirement.createdBy._id || requirement.createdBy,
+        notificationSenderId: req.body.storeId
+      });
+      await notificationRecord.save();
+
       const notification = {
         type: "quotation",
         title: "New Quotation Received",
-        message: `${storeName} sent a quotation for "${requirement.reqTitle}"`,
+        message: notificationMessage,
         requirementId: req.body.requirementId,
         responseId: response._id,
+        notificationId: notificationRecord._id,
         timestamp: new Date()
       };
-      
+
       const socketId = req.app.locals.userSockets?.get(requirement.createdBy.toString());
       if (socketId) {
         io.to(socketId).emit("notification", notification);
       }
     }
-    
+
     res.json(response);
   } catch (error) {
     res.status(500).json(error);
@@ -155,18 +177,11 @@ router.delete("/:id", async (req, res) => {
     
     // Send notification to customer when quotation is deleted by store owner
     const io = req.app.get("io");
-    if (data.requirementId && data.requirementId.createdBy) {
-      const requirement = await Requirement.findById(data.requirementId);
+    if (data.requirementId) {
+      const requirement = await Requirement.findById(data.requirementId).populate("createdBy", "firstName lastName");
       const store = await Store.findById(data.storeId);
       
       if (requirement && requirement.createdBy && store) {
-        let customerName = "A customer";
-        if (requirement.createdBy.firstName && requirement.createdBy.lastName) {
-          customerName = `${requirement.createdBy.firstName} ${requirement.createdBy.lastName}`;
-        } else if (requirement.createdBy.firstName) {
-          customerName = requirement.createdBy.firstName;
-        }
-        
         const storeName = store.storeName || "A store";
         
         const notificationMessage = `${storeName} deleted their quotation for "${requirement.reqTitle}"`;

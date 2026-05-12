@@ -21,7 +21,8 @@ const responseSchema = new mongoose.Schema({
   attachments: [{
     fileName: String,
     fileType: String,
-    data: String // Base64 encoded file data
+    url: String,        // Cloudinary URL
+    public_id: String   // Cloudinary public_id for deletion
   }],
   status: {
     type: String,
@@ -88,5 +89,13 @@ const responseSchema = new mongoose.Schema({
   }
 
 }, { timestamps: true });
+
+// Indexes for better query performance
+responseSchema.index({ requirementId: 1 });
+responseSchema.index({ storeId: 1 });
+responseSchema.index({ status: 1 });
+responseSchema.index({ isDeleted: 1 });
+// Compound index for common queries
+responseSchema.index({ requirementId: 1, isDeleted: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Response", responseSchema);

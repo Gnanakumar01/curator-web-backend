@@ -83,6 +83,14 @@ const storeSchema = new mongoose.Schema({
 // 2dsphere index for geospatial queries
 storeSchema.index({ location: "2dsphere" });
 
+// Indexes for better query performance
+storeSchema.index({ storeCategory: 1 });
+storeSchema.index({ storeOwner: 1 });
+storeSchema.index({ storeCity: 1 });
+storeSchema.index({ isDeleted: 1 });
+// Compound index for common queries
+storeSchema.index({ storeCategory: 1, isDeleted: 1, storeRatings: -1 });
+
 // Pre-save hook to keep location in sync with latitude/longitude
 // Using function syntax to preserve 'this' context
 storeSchema.pre("save", function() {
