@@ -4,9 +4,6 @@ const axios = require("axios");
 
 const NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org";
 
-// Load city localities from external JSON file (reduces memory usage)
-const CITY_LOCALITIES = require("../data/cityLocalities.json");
-
 const HEADERS = {
   "User-Agent": "Curator/1.0 (sgnanakumar929@gmail.com)", 
   "Accept-Language": "en",
@@ -253,33 +250,6 @@ router.get("/search", async (req, res) => {
       });
     }
 
-    // ── Strategy 3: Fallback from CITY_LOCALITIES static data ──
-    const queryLower = query.toLowerCase();
-    for (const [cityKey, localities] of Object.entries(CITY_LOCALITIES)) {
-      // Match city name itself
-      if (cityKey.startsWith(queryLower) || cityKey.includes(queryLower)) {
-        addResult({
-          name: cityKey.charAt(0).toUpperCase() + cityKey.slice(1),
-          type: "city",
-          city: "",
-          district: "",
-          displayName: `${cityKey.charAt(0).toUpperCase() + cityKey.slice(1)}, India`,
-        });
-      }
-      // Match localities within cities
-      for (const locality of localities) {
-        if (locality.toLowerCase().includes(queryLower)) {
-          addResult({
-            name: locality,
-            type: "locality",
-            city: cityKey.charAt(0).toUpperCase() + cityKey.slice(1),
-            district: "",
-            displayName: `${locality}, ${cityKey.charAt(0).toUpperCase() + cityKey.slice(1)}, India`,
-          });
-        }
-      }
-    }
-
     // Sort: cities first, then localities, then districts
     const typeOrder = { city: 0, locality: 1, district: 2 };
     allResults.sort((a, b) => (typeOrder[a.type] ?? 3) - (typeOrder[b.type] ?? 3));
@@ -336,27 +306,10 @@ router.get("/areas", async (req, res) => {
       }
     }
 
-    // ── Static fallback (always append these so the dropdown is never empty) ──
-    let fallbackKey = cityLower;
-    // Alias normalisation
-    const aliases = { bangalore: "bengaluru", bombay: "mumbai", madras: "chennai", calcutta: "kolkata", poona: "pune", "new delhi": "delhi" };
-    if (aliases[fallbackKey]) fallbackKey = aliases[fallbackKey];
-
-    if (CITY_LOCALITIES[fallbackKey]) {
-      for (const locality of CITY_LOCALITIES[fallbackKey]) {
-        addArea(locality, cityTrimmed);
-      }
-    }
-
     res.json(areas.slice(0, 50));
   } catch (err) {
     console.error("Areas search error:", err.message);
-    // Graceful fallback
-    const cityLower = req.query.city?.toLowerCase().trim() || "";
-    const aliases = { bangalore: "bengaluru", bombay: "mumbai", madras: "chennai", calcutta: "kolkata", poona: "pune" };
-    const key = aliases[cityLower] || cityLower;
-    const fallback = CITY_LOCALITIES[key] || [];
-    res.json(fallback.map((l) => ({ name: l, type: "locality", city: req.query.city, displayName: `${l}, ${req.query.city}` })));
+    res.json([]);
   }
 });
 

@@ -12,11 +12,24 @@ router.post("/create", async (req, res) => {
     const io = req.app.get("io");
     const requirement = await Requirement.findById(req.body.requirementId);
 
+    // Helper to get user ID string from various formats
+    const getUserIdString = (userField) => {
+      if (!userField) return null;
+      if (typeof userField === 'string') return userField;
+      if (userField._id) return userField._id.toString();
+      if (userField.toString) return userField.toString();
+      return null;
+    };
+
+    // 1. Send notification to customer (requirement creator)
     if (requirement && requirement.createdBy) {
       const store = await Store.findById(req.body.storeId);
       const storeName = store?.storeName || "A store";
 
       const notificationMessage = `${storeName} sent a quotation for "${requirement.reqTitle}"`;
+
+      // Get customer user ID
+      const customerUserId = getUserIdString(requirement.createdBy);
 
       // Persist notification to database
       const notificationRecord = new Response({
@@ -32,7 +45,7 @@ router.post("/create", async (req, res) => {
         notificationMessage: notificationMessage,
         notificationType: "quotation",
         isNotificationRead: false,
-        notificationRecipientId: requirement.createdBy._id || requirement.createdBy,
+        notificationRecipientId: customerUserId,
         notificationSenderId: req.body.storeId
       });
       await notificationRecord.save();
@@ -47,9 +60,41 @@ router.post("/create", async (req, res) => {
         timestamp: new Date()
       };
 
-      const socketId = req.app.locals.userSockets?.get(requirement.createdBy.toString());
-      if (socketId) {
-        io.to(socketId).emit("notification", notification);
+      // Send to customer via WebSocket
+      if (customerUserId) {
+        const customerSocketId = req.app.locals.userSockets?.get(customerUserId);
+        if (customerSocketId) {
+          io.to(customerSocketId).emit("notification", notification);
+          console.log("Quotation notification sent to customer:", customerUserId);
+        } else {
+          console.log("Customer not connected via WebSocket:", customerUserId);
+        }
+      }
+    }
+
+    // 2. Send confirmation notification to store owner who submitted the quotation
+    if (req.body.storeId) {
+      const store = await Store.findById(req.body.storeId).populate("storeOwner");
+      if (store && store.storeOwner) {
+        // Get store owner user ID
+        const storeOwnerUserId = getUserIdString(store.storeOwner);
+        if (storeOwnerUserId) {
+          const storeOwnerSocketId = req.app.locals.userSockets?.get(storeOwnerUserId);
+          if (storeOwnerSocketId) {
+            const notification = {
+              type: "quotation_submitted",
+              title: "Quotation Submitted Successfully",
+              message: `Your quotation for "${requirement?.reqTitle || 'the requirement'}" has been submitted.`,
+              requirementId: req.body.requirementId,
+              responseId: response._id,
+              timestamp: new Date()
+            };
+            io.to(storeOwnerSocketId).emit("notification", notification);
+            console.log("Quotation confirmation sent to store owner:", storeOwnerUserId);
+          } else {
+            console.log("Store owner not connected via WebSocket:", storeOwnerUserId);
+          }
+        }
       }
     }
 
@@ -93,6 +138,15 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+// Helper to get user ID string from various formats
+const getUserIdString = (userField) => {
+  if (!userField) return null;
+  if (typeof userField === 'string') return userField;
+  if (userField._id) return userField._id.toString();
+  if (userField.toString) return userField.toString();
+  return null;
+};
+
 router.put("/:id", async (req, res) => {
   try {
     const data = await Response.findByIdAndUpdate(
@@ -104,9 +158,12 @@ router.put("/:id", async (req, res) => {
     if (req.body.status === "Accepted" && data) {
       const io = req.app.get("io");
       const requirement = await Requirement.findById(data.requirementId).populate("createdBy", "firstName lastName");
-      const store = await Store.findById(data.storeId);
+      const store = await Store.findById(data.storeId).populate("storeOwner");
       
       if (store && store.storeOwner) {
+        // Get store owner user ID
+        const storeOwnerUserId = getUserIdString(store.storeOwner);
+        
         // Get customer name from requirement
         let customerName = "A customer";
         if (requirement?.createdBy) {
@@ -134,7 +191,7 @@ router.put("/:id", async (req, res) => {
           notificationMessage: notificationMessage,
           notificationType: "quotation_accepted",
           isNotificationRead: false,
-          notificationRecipientId: store.storeOwner,
+          notificationRecipientId: storeOwnerUserId,
           notificationSenderId: requirement?.createdBy?._id
         });
         await notificationRecord.save();
@@ -150,9 +207,14 @@ router.put("/:id", async (req, res) => {
           timestamp: new Date()
         };
         
-        const socketId = req.app.locals.userSockets?.get(store.storeOwner.toString());
-        if (socketId) {
-          io.to(socketId).emit("notification", notification);
+        if (storeOwnerUserId) {
+          const socketId = req.app.locals.userSockets?.get(storeOwnerUserId);
+          if (socketId) {
+            io.to(socketId).emit("notification", notification);
+            console.log("Quotation accepted notification sent to store owner:", storeOwnerUserId);
+          } else {
+            console.log("Store owner not connected via WebSocket:", storeOwnerUserId);
+          }
         }
       }
     }
@@ -179,10 +241,13 @@ router.delete("/:id", async (req, res) => {
     const io = req.app.get("io");
     if (data.requirementId) {
       const requirement = await Requirement.findById(data.requirementId).populate("createdBy", "firstName lastName");
-      const store = await Store.findById(data.storeId);
+      const store = await Store.findById(data.storeId).populate("storeOwner");
       
       if (requirement && requirement.createdBy && store) {
         const storeName = store.storeName || "A store";
+        
+        // Get customer user ID
+        const customerUserId = getUserIdString(requirement.createdBy);
         
         const notificationMessage = `${storeName} deleted their quotation for "${requirement.reqTitle}"`;
         
@@ -200,8 +265,8 @@ router.delete("/:id", async (req, res) => {
           notificationMessage: notificationMessage,
           notificationType: "quotation_deleted",
           isNotificationRead: false,
-          notificationRecipientId: requirement.createdBy._id,
-          notificationSenderId: store.storeOwner
+          notificationRecipientId: customerUserId,
+          notificationSenderId: store.storeOwner?._id
         });
         await notificationRecord.save();
         
@@ -215,9 +280,14 @@ router.delete("/:id", async (req, res) => {
           timestamp: new Date()
         };
         
-        const socketId = req.app.locals.userSockets?.get(requirement.createdBy._id.toString());
-        if (socketId) {
-          io.to(socketId).emit("notification", notification);
+        if (customerUserId) {
+          const socketId = req.app.locals.userSockets?.get(customerUserId);
+          if (socketId) {
+            io.to(socketId).emit("notification", notification);
+            console.log("Quotation deleted notification sent to customer:", customerUserId);
+          } else {
+            console.log("Customer not connected via WebSocket:", customerUserId);
+          }
         }
       }
     }
