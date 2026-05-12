@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const Response = require("../models/Response");
+const ResponseModel = require("../models/Response");
 
 // Create notification (using Response collection)
 router.post("/create", async (req, res) => {
@@ -21,7 +21,7 @@ router.post("/create", async (req, res) => {
     const isForStoreOwner = type === "quotation_accepted";
 
     // Create a new Response document with notification fields
-    const notification = new Response({
+    const notification = new ResponseModel({
       requirementId: relatedModel === "Requirement" ? relatedId : null,
       storeId: null,
       price: 0,
@@ -68,18 +68,19 @@ router.get("/user/:userId", async (req, res) => {
   try {
     const userId = req.params.userId;
     
-    // Find all Response documents that are notifications for this user
-    // This includes both store owner notifications and customer notifications
-    const notifications = await Response.find({
-      notificationRecipientId: userId,
-      $or: [
-        { notificationForStoreOwner: true },
-        { notificationType: "quotation" },
-        { notificationType: "quotation_accepted" }
-      ]
-    })
-    .populate("notificationSenderId", "firstName lastName")
-    .sort({ createdAt: -1 });
+     // Find all Response documents that are notifications for this user
+     // This includes both store owner notifications and customer notifications
+     const notifications = await ResponseModel.find({
+       notificationRecipientId: userId,
+       $or: [
+         { notificationForStoreOwner: true },
+         { notificationType: "quotation" },
+         { notificationType: "quotation_accepted" },
+         { notificationType: "quotation_deleted" }
+       ]
+     })
+     .populate("notificationSenderId", "firstName lastName")
+     .sort({ createdAt: -1 });
 
     res.json({ success: true, data: notifications });
   } catch (error) {
@@ -93,15 +94,16 @@ router.get("/user/:userId/unread-count", async (req, res) => {
   try {
     const userId = req.params.userId;
     
-    const count = await Response.countDocuments({
-      notificationRecipientId: userId,
-      $or: [
-        { notificationForStoreOwner: true },
-        { notificationType: "quotation" },
-        { notificationType: "quotation_accepted" }
-      ],
-      isNotificationRead: false
-    });
+     const count = await ResponseModel.countDocuments({
+       notificationRecipientId: userId,
+       $or: [
+         { notificationForStoreOwner: true },
+         { notificationType: "quotation" },
+         { notificationType: "quotation_accepted" },
+         { notificationType: "quotation_deleted" }
+       ],
+       isNotificationRead: false
+     });
 
     res.json({ success: true, count });
   } catch (error) {
@@ -113,7 +115,7 @@ router.get("/user/:userId/unread-count", async (req, res) => {
 // Mark notification as read
 router.put("/:id/read", async (req, res) => {
   try {
-    const notification = await Response.findByIdAndUpdate(
+    const notification = await ResponseModel.findByIdAndUpdate(
       req.params.id,
       { isNotificationRead: true },
       { new: true }
@@ -130,7 +132,7 @@ router.put("/user/:userId/read-all", async (req, res) => {
   try {
     const userId = req.params.userId;
     
-    await Response.updateMany(
+    await ResponseModel.updateMany(
       {
         notificationRecipientId: userId,
         $or: [
@@ -153,7 +155,7 @@ router.put("/user/:userId/read-all", async (req, res) => {
 // Delete notification
 router.delete("/:id", async (req, res) => {
   try {
-    await Response.findByIdAndDelete(req.params.id);
+    await ResponseModel.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: "Notification deleted" });
   } catch (error) {
     console.error("Error deleting notification:", error);

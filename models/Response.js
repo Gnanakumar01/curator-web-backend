@@ -70,11 +70,11 @@ const responseSchema = new mongoose.Schema({
   notificationMessage: {
     type: String
   },
-  notificationType: {
-    type: String,
-    enum: ['quotation_accepted', 'quotation', 'system', null],
-    default: null
-  },
+   notificationType: {
+     type: String,
+     enum: ['quotation_accepted', 'quotation', 'system', 'quotation_deleted', null],
+     default: null
+   },
   isNotificationRead: {
     type: Boolean,
     default: false

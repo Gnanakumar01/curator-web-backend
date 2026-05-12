@@ -1,12 +1,12 @@
 const express = require("express");
 const router = express.Router();
-const Response = require("../models/Response");
+const ResponseModel = require("../models/Response");
 const Requirement = require("../models/Requirement");
 const Store = require("../models/Store");
 
 router.post("/create", async (req, res) => {
   try {
-    const response = new Response(req.body);
+    const response = new ResponseModel(req.body);
     await response.save();
 
     const io = req.app.get("io");
@@ -32,7 +32,7 @@ router.post("/create", async (req, res) => {
       const customerUserId = getUserIdString(requirement.createdBy);
 
       // Persist notification to database
-      const notificationRecord = new Response({
+      const notificationRecord = new ResponseModel({
         requirementId: req.body.requirementId,
         storeId: null,
         price: 0,
@@ -106,7 +106,7 @@ router.post("/create", async (req, res) => {
 
 router.get("/", async (req, res) => {
   try {
-    const data = await Response.find({ isDeleted: { $ne: true } });
+    const data = await ResponseModel.find({ isDeleted: { $ne: true } });
     res.json(data);
   } catch (error) {
     res.status(500).json(error);
@@ -115,7 +115,7 @@ router.get("/", async (req, res) => {
 
 router.get("/requirement/:requirementId", async (req, res) => {
   try {
-    const data = await Response.find({ requirementId: req.params.requirementId, isDeleted: { $ne: true } })
+    const data = await ResponseModel.find({ requirementId: req.params.requirementId, isDeleted: { $ne: true } })
       .populate("storeId", "storeName storeImage storeRatings storeAddressLine storeLocality storeCity storeOwner");
     res.json(data);
   } catch (error) {
@@ -125,7 +125,7 @@ router.get("/requirement/:requirementId", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   try {
-    const data = await Response.findById(req.params.id)
+    const data = await ResponseModel.findById(req.params.id)
       .populate("storeId", "storeName storeImage storeRatings storeAddressLine storeLocality storeCity")
       .populate("requirementId", "reqTitle expectedBudget targetLocation deadLineDate");
     // If the response is soft deleted, return 404
@@ -149,7 +149,7 @@ const getUserIdString = (userField) => {
 
 router.put("/:id", async (req, res) => {
   try {
-    const data = await Response.findByIdAndUpdate(
+    const data = await ResponseModel.findByIdAndUpdate(
       req.params.id,
       req.body,
       { new: true }
@@ -178,7 +178,7 @@ router.put("/:id", async (req, res) => {
         const notificationMessage = `${customerName} accepted your quotation for "${requirement?.reqTitle || "a requirement"}"`;
         
         // Create notification record in database
-        const notificationRecord = new Response({
+        const notificationRecord = new ResponseModel({
           requirementId: data.requirementId,
           storeId: null,
           price: 0,
@@ -228,7 +228,7 @@ router.put("/:id", async (req, res) => {
 // DELETE /api/responses/:id - Soft delete a response/quotation
 router.delete("/:id", async (req, res) => {
   try {
-    const data = await Response.findByIdAndUpdate(
+    const data = await ResponseModel.findByIdAndUpdate(
       req.params.id,
       { isDeleted: true },
       { new: true }
@@ -252,7 +252,7 @@ router.delete("/:id", async (req, res) => {
         const notificationMessage = `${storeName} deleted their quotation for "${requirement.reqTitle}"`;
         
         // Create notification record in database
-        const notificationRecord = new Response({
+        const notificationRecord = new ResponseModel({
           requirementId: data.requirementId,
           storeId: null,
           price: 0,
@@ -277,6 +277,7 @@ router.delete("/:id", async (req, res) => {
           message: notificationMessage,
           requirementId: data.requirementId,
           responseId: notificationRecord._id,
+          deletedResponseId: data._id, // The ID of the deleted quotation
           timestamp: new Date()
         };
         
