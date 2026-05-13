@@ -4,13 +4,113 @@ const multer = require("multer");
 const cloudinary = require("../config/cloudinary");
 const { Readable } = require("stream");
 
+// Simple in-memory rate limiter for protection on older servers
+class RateLimiter {
+  constructor(options = {}) {
+    this.windowMs = options.windowMs || 60 * 1000; // 1 minute default
+    this.maxRequests = options.maxRequests || 10; // 10 requests per minute default
+    this.requests = new Map(); // IP -> [{timestamp}, ...]
+  }
+
+  cleanOldEntries() {
+    const cutoff = Date.now() - this.windowMs;
+    for (const [ip, timestamps] of this.requests.entries()) {
+      const valid = timestamps.filter(t => t > cutoff);
+      if (valid.length === 0) {
+        this.requests.delete(ip);
+      } else {
+        this.requests.set(ip, valid);
+      }
+    }
+  }
+
+  isAllowed(ip) {
+    this.cleanOldEntries();
+    const timestamps = this.requests.get(ip) || [];
+    const now = Date.now();
+    const recent = timestamps.filter(t => now - t < this.windowMs);
+    
+    if (recent.length >= this.maxRequests) {
+      return false;
+    }
+    
+    recent.push(now);
+    this.requests.set(ip, recent);
+    return true;
+  }
+}
+
+// Create rate limiter for upload endpoints
+// Limits: 10 upload requests per minute per IP (adjust based on server capacity)
+const uploadRateLimiter = new RateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 10,     // 10 requests per minute
+});
+
+// Rate limiting middleware
+const rateLimitMiddleware = (req, res, next) => {
+  const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+  
+  if (!uploadRateLimiter.isAllowed(clientIp)) {
+    return res.status(429).json({
+      success: false,
+      message: 'Too many requests. Please try again later.',
+      retryAfter: 60 // seconds
+    });
+  }
+  
+  next();
+};
+
+/**
+ * Run promises with limited concurrency to prevent memory spikes
+ * @param {Array} tasks - Array of functions returning promises
+ * @param {number} concurrency - Max concurrent executions (default: 3)
+ * @returns {Promise<Array>} - Results in order
+ */
+const runWithConcurrency = async (tasks, concurrency = 3) => {
+  const results = new Array(tasks.length);
+  let currentIndex = 0;
+  let activeCount = 0;
+  
+  return new Promise((resolve, reject) => {
+    const runNext = async () => {
+      if (currentIndex >= tasks.length && activeCount === 0) {
+        return resolve(results);
+      }
+      
+      while (activeCount < concurrency && currentIndex < tasks.length) {
+        const index = currentIndex++;
+        activeCount++;
+        
+        tasks[index]()
+          .then(result => {
+            results[index] = { status: 'fulfilled', value: result };
+          })
+          .catch(error => {
+            results[index] = { status: 'rejected', reason: error };
+          })
+          .finally(() => {
+            activeCount--;
+            runNext();
+          });
+      }
+    };
+    
+    runNext();
+  });
+};
+
 // Wrapper for async route handlers to catch errors properly in Express 5.x
 const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-// Use memory storage to avoid writing files to disk
-const storage = multer.memoryStorage();
+// Use memory storage with limited buffer to avoid excessive memory usage on older servers
+// Set a reasonable limit slightly above max video size (10MB) to prevent DoS
+const storage = multer.memoryStorage({
+  limits: { fileSize: 12 * 1024 * 1024 } // 12MB hard limit for memory buffer
+});
 
 const upload = multer({
   storage: storage,
@@ -23,11 +123,25 @@ const upload = multer({
       'application/pdf'
     ];
 
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images, videos, audio, and PDF files are allowed'));
+    // Check file size before processing
+    if (file.size > 10 * 1024 * 1024) {
+      return cb(new Error('File size exceeds 10MB limit'));
     }
+
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error('Only images, videos, audio, and PDF files are allowed'));
+    }
+
+    // Get category-specific size limit
+    const category = getFileCategory(file.mimetype);
+    const maxSize = SIZE_LIMITS[category];
+
+    if (file.size > maxSize) {
+      const limitMB = (maxSize / 1024 / 1024).toFixed(0);
+      return cb(new Error(`File size exceeds ${limitMB}MB limit for ${category} files`));
+    }
+
+    cb(null, true);
   }
 });
 
@@ -135,51 +249,68 @@ const bufferToStream = (buffer) => {
 
 /**
  * Upload file buffer to Cloudinary with compression
+ * Optimized for memory efficiency on older servers with timeout protection
  */
-const uploadToCloudinary = async (file) => {
-  return new Promise((resolve, reject) => {
-    const category = getFileCategory(file.mimetype);
+const uploadToCloudinary = async (file, timeout = 30000) => {
+  return Promise.race([
+    new Promise((resolve, reject) => {
+      const category = getFileCategory(file.mimetype);
 
-    if (!category) {
-      return reject(new Error(`Unsupported file type: ${file.mimetype}`));
-    }
-
-    // Validate file size
-    const maxSize = SIZE_LIMITS[category];
-    if (file.size > maxSize) {
-      return reject(new Error(
-        `File size exceeds ${(maxSize / 1024 / 1024).toFixed(0)}MB limit for ${category} files`
-      ));
-    }
-
-    const uploadOptions = getCloudinaryUploadOptions(file);
-    if (!uploadOptions) {
-      return reject(new Error('Failed to determine upload options'));
-    }
-
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        ...uploadOptions,
-        folder: "curator_uploads",
-        resource_type: uploadOptions.resource_type,
-      },
-      (error, result) => {
-        if (error) {
-          return reject(error);
-        }
-        resolve(result);
+      if (!category) {
+        return reject(new Error(`Unsupported file type: ${file.mimetype}`));
       }
-    );
 
-    const stream = bufferToStream(file.buffer);
-    stream.pipe(uploadStream);
-  });
+      // Validate file size (redundant with fileFilter but safe)
+      const maxSize = SIZE_LIMITS[category];
+      if (file.size > maxSize) {
+        return reject(new Error(
+          `File size exceeds ${(maxSize / 1024 / 1024).toFixed(0)}MB limit for ${category} files`
+        ));
+      }
+
+      const uploadOptions = getCloudinaryUploadOptions(file);
+      if (!uploadOptions) {
+        return reject(new Error('Failed to determine upload options'));
+      }
+
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          ...uploadOptions,
+          folder: "curator_uploads",
+          resource_type: uploadOptions.resource_type,
+          // Optimize for older servers: use eager transformations for immediate compression
+          eager: uploadOptions.transformation ? [uploadOptions.transformation] : undefined,
+          // Clean up unused files to save storage
+          invalidate: true,
+        },
+        (error, result) => {
+          if (error) {
+            return reject(error);
+          }
+          resolve(result);
+        }
+      );
+
+      // Create stream from buffer and pipe to Cloudinary
+      const stream = bufferToStream(file.buffer);
+      stream.pipe(uploadStream);
+
+      // Clean up buffer reference to help garbage collection
+      // Note: buffer will be garbage collected after this function exits
+    }),
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Upload timeout: Server took too long to respond'));
+      }, timeout);
+    })
+  ]);
 };
 
 /**
  * Single file upload endpoint
+ * Protected by rate limiting and strict validation
  */
-router.post("/", upload.single('file'), asyncHandler(async (req, res) => {
+router.post("/", rateLimitMiddleware, upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({
       success: false,
@@ -202,8 +333,9 @@ router.post("/", upload.single('file'), asyncHandler(async (req, res) => {
 
 /**
  * Multiple files upload endpoint
+ * Protected by rate limiting and uses concurrency control
  */
-router.post("/multiple", upload.array('files', 10), asyncHandler(async (req, res) => {
+router.post("/multiple", rateLimitMiddleware, upload.array('files', 10), asyncHandler(async (req, res) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({
       success: false,
@@ -211,23 +343,27 @@ router.post("/multiple", upload.array('files', 10), asyncHandler(async (req, res
     });
   }
 
-  const uploadPromises = req.files.map((file) => uploadToCloudinary(file));
-  const results = await Promise.allSettled(uploadPromises);
+  // Create task array for concurrency-limited execution
+  // Limit to 3 concurrent uploads to manage memory on older servers
+  const tasks = req.files.map((file) => () => uploadToCloudinary(file));
+  
+  const results = await runWithConcurrency(tasks, 3);
 
   const successful = [];
   const failed = [];
 
   results.forEach((result, index) => {
-    if (result.status === 'fulfilled') {
+    if (result && result.status === 'fulfilled') {
       successful.push({
         fileUrl: result.value.secure_url || result.value.url,
         filename: result.value.public_id,
         originalName: req.files[index].originalname,
+        bytes: result.value.bytes,
       });
     } else {
       failed.push({
         fileName: req.files[index].originalname,
-        error: result.reason.message,
+        error: result?.reason?.message || 'Unknown error',
       });
     }
   });

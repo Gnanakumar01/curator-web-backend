@@ -1,14 +1,47 @@
 const mongoose = require("mongoose");
 
+// Helper to validate Cloudinary/URL format
+const isValidUrl = (url) => {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Helper to validate array of URLs
+const isValidUrlArray = (arr) => {
+  if (!Array.isArray(arr) || arr.length === 0) return false;
+  return arr.every(url => isValidUrl(url));
+};
+
 const storeSchema = new mongoose.Schema({
-
-  storeName: String,
-  storeAddressLine: String,
-  storeLocality: String,
-  storePincode: String,
-  storeCity: String,
+  storeName: {
+    type: String,
+    required: true
+  },
+  storeAddressLine: {
+    type: String,
+    required: true
+  },
+  storeLocality: {
+    type: String,
+    required: true
+  },
+  storePincode: {
+    type: String,
+    required: true,
+    match: [/^\d{6}$/, 'Please enter valid 6-digit pincode']
+  },
+  storeCity: {
+    type: String,
+    required: true,
+    default: "Bengaluru"
+  },
   storeState: String,
-
+  
   storeGmapUrl: String,
   latitude: {
     type: Number,
@@ -18,6 +51,7 @@ const storeSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
+  
   // Geospatial field for location-based queries
   location: {
     type: {
@@ -30,50 +64,85 @@ const storeSchema = new mongoose.Schema({
       default: [null, null] // [longitude, latitude]
     }
   },
-
-  storeRatings: {
-    type: Number,
-    default: 0
-  },
+  
+  // storeRatings: {
+  //   type: Number,
+  //   default: 0,
+  //   min: [0, 'Rating cannot be negative'],
+  //   max: [5, 'Rating cannot exceed 5']
+  // },
   storeKm: {
     type: String,
     default: ""
   },
-  storeCategory: String,
-
-  storeContact: String,
-  storeEmail: String,
-
-  // Store image field
+  storeCategory: {
+    type: String,
+    required: true,
+    enum: ['Pharmacy', 'Hardware', 'Electronics', 'Stationery', 'Cosmetic']
+  },
+  
+  storeContact: {
+    type: String,
+    required: true
+  },
+  storeEmail: {
+    type: String,
+    required: true,
+    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please fill a valid email address'],
+    lowercase: true,
+    trim: true
+  },
+  
+  // Store image field (single image, max 5MB, compressed to ~1MB)
   storeImage: {
     type: String,
-    default: ""
+    required: true,
+    validate: {
+      validator: isValidUrl,
+      message: 'Please provide a valid URL for store image'
+    }
   },
-
-  // Attached files field
+  
+  // Attached files field (gallery images/videos, each max 5MB images/10MB videos)
   storeAttachedFiles: {
     type: [String],
-    default: []
+    required: true,
+    validate: {
+      validator: isValidUrlArray,
+      message: 'Please upload valid gallery images or videos'
+    }
   },
-
-  // Identity proof field (license/GST certificate)
+  
+  // Identity proof field (license/GST certificate, PDF max 5MB)
   storeProof: {
     type: String,
-    default: ""
+    default: "",
+    validate: {
+      validator: function(v) {
+        // Allow empty string (optional field)
+        if (!v) return true;
+        return isValidUrl(v);
+      },
+      message: 'Please provide a valid URL for store proof'
+    }
   },
-
+  
   // Store owner ID proof field (Aadhaar, PAN, etc.) - multiple images
   storeOwnerIdProof: {
     type: [String],
-    default: []
+    required: true,
+    validate: {
+      validator: isValidUrlArray,
+      message: 'Please upload valid owner ID proof images'
+    }
   },
-
+  
   storeOwner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    default: null
+    required: true
   },
-
+  
   isDeleted: {
     type: Boolean,
     default: false

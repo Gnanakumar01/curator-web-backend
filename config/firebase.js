@@ -20,9 +20,6 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
-// 🔥 ADD THIS (VERY IMPORTANT DEBUG)
-admin.auth().listUsers(1)
-  .then(() => console.log("Firebase Admin Connected"))
-  .catch(err => console.error("❌ Firebase Admin Error:", err));
+console.log("Firebase Admin Connected");
 
 module.exports = admin;

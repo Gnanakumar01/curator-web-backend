@@ -104,6 +104,53 @@ const resolveCoordinates = async (storeData) => {
 };
 
 // ---------------------------------------------------------------------------
+// Helper: validate file URLs for security and integrity
+// ---------------------------------------------------------------------------
+const validateFileUrls = (data) => {
+  const errors = [];
+
+  // Validate storeImage (single URL)
+  if (data.storeImage) {
+    if (typeof data.storeImage !== 'string' || !data.storeImage.startsWith('http')) {
+      errors.push('storeImage must be a valid URL');
+    }
+  }
+
+  // Validate storeAttachedFiles (array of URLs)
+  if (data.storeAttachedFiles && Array.isArray(data.storeAttachedFiles)) {
+    if (data.storeAttachedFiles.length === 0) {
+      errors.push('storeAttachedFiles must contain at least one file');
+    }
+    data.storeAttachedFiles.forEach((url, index) => {
+      if (typeof url !== 'string' || !url.startsWith('http')) {
+        errors.push(`storeAttachedFiles[${index}] must be a valid URL`);
+      }
+    });
+  }
+
+  // Validate storeProof (single URL, optional)
+  if (data.storeProof) {
+    if (typeof data.storeProof !== 'string' || !data.storeProof.startsWith('http')) {
+      errors.push('storeProof must be a valid URL');
+    }
+  }
+
+  // Validate storeOwnerIdProof (array of URLs)
+  if (data.storeOwnerIdProof && Array.isArray(data.storeOwnerIdProof)) {
+    if (data.storeOwnerIdProof.length === 0) {
+      errors.push('storeOwnerIdProof must contain at least one file');
+    }
+    data.storeOwnerIdProof.forEach((url, index) => {
+      if (typeof url !== 'string' || !url.startsWith('http')) {
+        errors.push(`storeOwnerIdProof[${index}] must be a valid URL`);
+      }
+    });
+  }
+
+  return errors;
+};
+
+// ---------------------------------------------------------------------------
 // Helper: build the final store document from raw request body
 // ---------------------------------------------------------------------------
 const buildStoreData = async (body) => {
@@ -134,6 +181,7 @@ const buildStoreData = async (body) => {
     storeImage:         storeData.storeImage       || storeData.image        || storeData.store_image || storeData.imageUrl,
     storeImages:        storeData.storeImages      || [],
     storeAttachedFiles: storeData.storeAttachedFiles || [],
+    storeProof:         storeData.storeProof       || "", // Added missing storeProof field
     storeOwnerIdProof:  storeData.storeOwnerIdProof  || [],
     storeOwner,
   };
@@ -150,6 +198,15 @@ const handleCreateStore = asyncHandler(async (req, res) => {
   }
 
   try {
+    // Validate file URLs before creating store
+    const fileValidationErrors = validateFileUrls(req.body);
+    if (fileValidationErrors.length > 0) {
+      return res.status(400).json({
+        message: "File validation failed",
+        errors: fileValidationErrors
+      });
+    }
+
     const finalStoreData = await buildStoreData(req.body);
     console.log("Final store data to save:", JSON.stringify(finalStoreData));
 
@@ -290,11 +347,20 @@ router.get("/:id", asyncHandler(async (req, res) => {
 
 // PUT /stores/:id
 router.put("/:id", asyncHandler(async (req, res) => {
+  // Validate file URLs before updating store
+  const fileValidationErrors = validateFileUrls(req.body);
+  if (fileValidationErrors.length > 0) {
+    return res.status(400).json({
+      message: "File validation failed",
+      errors: fileValidationErrors
+    });
+  }
+
   const store = await Store.findById(req.params.id);
   if (!store) return res.status(404).json({ message: "Store not found" });
 
   Object.assign(store, req.body);
-  await store.save();
+  await store.save({ validateBeforeSave: true }); // Ensure model validators run
 
   return res.json(store);
 }));

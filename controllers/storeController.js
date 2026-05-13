@@ -1,11 +1,80 @@
 const Store = require("../models/Store");
 
+// Validation helper for store file fields
+const validateStoreFiles = (data) => {
+  const errors = [];
+
+  // Validate storeImage (single image, max 5MB)
+  if (data.storeImage) {
+    if (!data.storeImage.startsWith('http')) {
+      errors.push('storeImage must be a valid URL');
+    }
+    // Could add more validation: check if URL is from Cloudinary, check file type from URL, etc.
+  }
+
+  // Validate storeAttachedFiles (array of images/videos)
+  if (data.storeAttachedFiles && Array.isArray(data.storeAttachedFiles)) {
+    if (data.storeAttachedFiles.length === 0) {
+      errors.push('storeAttachedFiles must contain at least one file');
+    }
+    data.storeAttachedFiles.forEach((url, index) => {
+      if (!url.startsWith('http')) {
+        errors.push(`storeAttachedFiles[${index}] must be a valid URL`);
+      }
+    });
+  }
+
+  // Validate storeProof (PDF, max 5MB)
+  if (data.storeProof) {
+    if (!data.storeProof.startsWith('http')) {
+      errors.push('storeProof must be a valid URL');
+    }
+  }
+
+  // Validate storeOwnerIdProof (array of images)
+  if (data.storeOwnerIdProof && Array.isArray(data.storeOwnerIdProof)) {
+    if (data.storeOwnerIdProof.length === 0) {
+      errors.push('storeOwnerIdProof must contain at least one file');
+    }
+    data.storeOwnerIdProof.forEach((url, index) => {
+      if (!url.startsWith('http')) {
+        errors.push(`storeOwnerIdProof[${index}] must be a valid URL`);
+      }
+    });
+  }
+
+  return errors;
+};
+
 exports.createStore = async (req, res) => {
   try {
+    // Validate file URLs before creating store
+    const validationErrors = validateStoreFiles(req.body);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+
     const store = await Store.create(req.body);
     res.json(store);
   } catch (err) {
-    res.status(500).json(err);
+    console.error("Error creating store:", err);
+    
+    // Handle Mongoose validation errors
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors
+      });
+    }
+    
+    res.status(500).json({
+      message: 'Failed to create store',
+      error: err.message
+    });
   }
 };
 
@@ -93,13 +162,43 @@ exports.getStore = async (req, res) => {
 };
 
 exports.updateStore = async (req, res) => {
-  const store = await Store.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true }
-  );
+  try {
+    // Validate file URLs before updating store
+    const validationErrors = validateStoreFiles(req.body);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
 
-  res.json(store);
+    const store = await Store.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true } // Run model validators
+    );
+
+    if (!store) {
+      return res.status(404).json({ message: 'Store not found' });
+    }
+
+    res.json(store);
+  } catch (err) {
+    console.error("Error updating store:", err);
+    
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors
+      });
+    }
+    
+    res.status(500).json({
+      message: 'Failed to update store',
+      error: err.message
+    });
+  }
 };
 
 exports.deleteStore = async (req, res) => {

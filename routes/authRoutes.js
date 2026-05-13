@@ -6,8 +6,6 @@ const Store = require("../models/Store");
 const jwt = require("jsonwebtoken");
 
 router.post("/google-login", async (req, res) => {
-  console.log("🔍 Request body:", req.body);
-  console.log("🔍 JWT_SECRET:", process.env.JWT_SECRET);
   try {
     const { idToken } = req.body;
 

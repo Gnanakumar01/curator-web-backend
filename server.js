@@ -9,7 +9,11 @@ const { Server } = require("socket.io");
 
 // MUST be first before anything else
 dotenv.config();
-console.log("JWT_SECRET loaded:", process.env.JWT_SECRET);
+
+// Don't log sensitive data in production
+if (process.env.NODE_ENV !== 'production') {
+  console.log("JWT_SECRET loaded:", process.env.JWT_SECRET ? "***" : "NOT SET");
+}
 
 connectDB();
 
@@ -114,4 +118,43 @@ const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});
+
+// ---------------------------------------------------------------------------
+// Production-ready error handling for older servers
+// ---------------------------------------------------------------------------
+
+// Handle uncaught exceptions (synchronization errors, etc.)
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION - Shutting down:', err);
+  // Graceful shutdown
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION - Shutting down:', reason);
+  // Graceful shutdown
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
+// Handle SIGTERM (Docker, PM2, etc.)
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+  });
+});
+
+// Handle SIGINT (Ctrl+C)
+process.on('SIGINT', () => {
+  console.log('SIGINT signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
 });
