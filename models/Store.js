@@ -28,7 +28,17 @@ const storeSchema = new mongoose.Schema({
   },
   storeLocality: {
     type: String,
-    required: true
+    required: true,
+    validate: {
+      validator: function(v) {
+        // Prevent page numbers from being accepted as locality names
+        if (/^\d+$/.test(v.trim())) {
+          return false;
+        }
+        return true;
+      },
+      message: 'Please enter a valid locality name, not a page number'
+    }
   },
   storePincode: {
     type: String,
@@ -38,7 +48,17 @@ const storeSchema = new mongoose.Schema({
   storeCity: {
     type: String,
     required: true,
-    default: "Bengaluru"
+    default: "Bengaluru",
+    validate: {
+      validator: function(v) {
+        // Prevent page numbers from being accepted as city names
+        if (/^\d+$/.test(v.trim())) {
+          return false;
+        }
+        return true;
+      },
+      message: 'Please enter a valid city name, not a page number'
+    }
   },
   storeState: String,
   

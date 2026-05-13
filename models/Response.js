@@ -30,12 +30,12 @@ const responseSchema = new mongoose.Schema({
   price: {
     type: Number,
     required: true,
-    min: [1, 'Price must be at least 1']
+    // min: [1, 'Price must be at least 1']
   },
   deliveryTime: {
     type: Number,
     required: true,
-    min: [1, 'Delivery time must be at least 1']
+    // min: [1, 'Delivery time must be at least 1']
   },
   deliveryTimeUnit: {
     type: String,

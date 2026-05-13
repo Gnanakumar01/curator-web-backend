@@ -32,22 +32,22 @@ router.post("/create", async (req, res) => {
       const customerUserId = getUserIdString(requirement.createdBy);
 
       // Persist notification to database
-      const notificationRecord = new ResponseModel({
-        requirementId: req.body.requirementId,
-        storeId: null,
-        price: 0,
-        deliveryTime: 0,
-        deliveryTimeUnit: "days",
-        message: notificationMessage,
-        status: "Notification",
-        notificationForStoreOwner: false,
-        notificationTitle: "New Quotation Received",
-        notificationMessage: notificationMessage,
-        notificationType: "quotation",
-        isNotificationRead: false,
-        notificationRecipientId: customerUserId,
-        notificationSenderId: req.body.storeId
-      });
+       const notificationRecord = new ResponseModel({
+         requirementId: req.body.requirementId,
+         storeId: req.body.storeId,
+         price: 0,
+         deliveryTime: 0,
+         deliveryTimeUnit: "days",
+         message: notificationMessage,
+         status: "Notification",
+         notificationForStoreOwner: false,
+         notificationTitle: "New Quotation Received",
+         notificationMessage: notificationMessage,
+         notificationType: "quotation",
+         isNotificationRead: false,
+         notificationRecipientId: customerUserId,
+         notificationSenderId: req.body.storeId
+       });
       await notificationRecord.save();
 
       const notification = {
@@ -180,7 +180,7 @@ router.put("/:id", async (req, res) => {
         // Create notification record in database
         const notificationRecord = new ResponseModel({
           requirementId: data.requirementId,
-          storeId: null,
+          storeId: req.body.storeId,
           price: 0,
           deliveryTime: 0,
           deliveryTimeUnit: "days",

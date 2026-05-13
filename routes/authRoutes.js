@@ -21,9 +21,15 @@ router.post("/google-login", async (req, res) => {
 
     let user = await User.findOne({ email });
 
+    // Split name into firstName and lastName
+    const nameParts = (name || "User").split(' ');
+    const firstName = nameParts[0] || "User";
+    const lastName = nameParts.slice(1).join(' ') || "User";
+
     if (!user) {
       user = await User.create({
-        firstName: name || "User",
+        firstName,
+        lastName,
         email,
         profileImage: picture || "",
         userType: "customer"

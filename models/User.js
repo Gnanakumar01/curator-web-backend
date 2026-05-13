@@ -4,15 +4,14 @@ const userSchema = new mongoose.Schema({
   firstName: {
     type: String,
     required: true,
-    minlength: [3, 'First name must be at least 3 characters'],
-    match: [/^[A-Za-z]+$/, 'Only letters are allowed in first name']
+    minlength: [2, 'First name must be at least 2 characters'],
+    match: [/^[A-Za-z\s]+$/, 'Only letters and spaces are allowed in first name']
   },
   lastName: {
-    type: String,
-    required: true,
-    minlength: [3, 'Last name must be at least 3 characters'],
-    match: [/^[A-Za-z]+$/, 'Only letters are allowed in last name']
-  },
+     type: String,
+     required: false,
+     match: [/^[A-Za-z\s]+$/, 'Only letters and spaces are allowed in last name']
+   },
   email: {
     type: String,
     required: true,

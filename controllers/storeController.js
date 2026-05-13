@@ -43,6 +43,16 @@ const validateStoreFiles = (data) => {
     });
   }
 
+  // Validate storeCity - prevent page numbers
+  if (data.storeCity && /^\d+$/.test(data.storeCity.trim())) {
+    errors.push('Please enter a valid city name, not a page number');
+  }
+
+  // Validate storeLocality - prevent page numbers
+  if (data.storeLocality && /^\d+$/.test(data.storeLocality.trim())) {
+    errors.push('Please enter a valid locality name, not a page number');
+  }
+
   return errors;
 };
 
