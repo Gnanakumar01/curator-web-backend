@@ -10,7 +10,8 @@ const connectDB = async () => {
       family: 4, // Use IPv4 for better compatibility
     };
 
-    await mongoose.connect(process.env.MONGO_URI, options);
+    const mongoUri = process.env.MONGO_URI || "mongodb://localhost:27017/curator";
+    await mongoose.connect(mongoUri, options);
     console.log("MongoDB Connected");
   } catch (error) {
     console.error("MongoDB connection error:", error.message);

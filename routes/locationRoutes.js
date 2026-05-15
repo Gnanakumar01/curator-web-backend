@@ -367,4 +367,39 @@ router.get("/details", async (req, res) => {
   }
 });
 
+// ─── /locations endpoint ──────────────────────────────────────────────────────
+// Real-time locality search endpoint with formatted response
+// Returns: { label, value, lat, lon } for each location
+router.get("/locations", async (req, res) => {
+  try {
+    const query = req.query.q;
+
+    if (!query || query.trim().length < 2) {
+      return res.json([]);
+    }
+
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=jsonv2&addressdetails=1&limit=5&countrycodes=in`
+    );
+
+    const data = await response.json();
+
+    const formatted = data.map((item) => ({
+      label:
+        item.address?.suburb ||
+        item.address?.neighbourhood ||
+        item.address?.city ||
+        item.display_name,
+      value: item.display_name,
+      lat: item.lat,
+      lon: item.lon,
+    }));
+
+    res.json(formatted);
+  } catch (error) {
+    console.error("Location fetch error:", error.message);
+    res.status(500).json({ message: "Location fetch failed" });
+  }
+});
+
 module.exports = router;

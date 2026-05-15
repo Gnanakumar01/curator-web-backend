@@ -23,10 +23,17 @@ router.post("/create", async (req, res) => {
     const requirement = new Requirement(requirementData);
     const savedRequirement = await requirement.save();
 
-    res.status(201).json({
-      success: true,
-      data: savedRequirement
-    });
+     // Emit newRequirement socket event so store owners see it in real-time
+     const io = req.app.get("io");
+     if (io) {
+       io.emit("newRequirement", savedRequirement);
+       console.log("New requirement emitted via WebSocket:", savedRequirement._id);
+     }
+
+     res.status(201).json({
+       success: true,
+       data: savedRequirement
+     });
 
   } catch (error) {
     console.error("Error creating requirement:", error);

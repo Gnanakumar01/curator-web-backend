@@ -93,11 +93,27 @@ router.post("/create", async (req, res) => {
       }
     }
 
+    // 3. Emit newQuotation socket event for all store owners in the same category
+    //    (enables real-time updates in CuratorView for other store owners)
+    if (requirement && requirement.reqCategory) {
+      const categoryRoom = `category_${requirement.reqCategory.toLowerCase()}`;
+      const newQuotationEvent = {
+        type: "newQuotation",
+        requirementId: req.body.requirementId,
+        responseId: response._id,
+        storeId: req.body.storeId,
+        category: requirement.reqCategory,
+        timestamp: new Date(),
+      };
+      io.to(categoryRoom).emit("newQuotation", newQuotationEvent);
+      console.log("New quotation event emitted to room:", categoryRoom);
+    }
+
     res.json(response);
-  } catch (error) {
-    res.status(500).json(error);
-  }
-});
+   } catch (error) {
+     res.status(500).json(error);
+   }
+ });
 
 router.get("/", async (req, res) => {
   try {
@@ -154,70 +170,82 @@ router.put("/:id", async (req, res) => {
     });
 
     if (req.body.status === "Accepted" && data) {
-      const io = req.app.get("io");
-      const requirement = await Requirement.findById(data.requirementId).populate(
-        "createdBy",
-        "firstName lastName"
-      );
-      const store = await Store.findById(data.storeId).populate("storeOwner");
+       const io = req.app.get("io");
+       const requirement = await Requirement.findById(data.requirementId).populate(
+         "createdBy",
+         "firstName lastName"
+       );
+       const store = await Store.findById(data.storeId).populate("storeOwner");
 
-      if (store && store.storeOwner) {
-        const storeOwnerUserId = getUserIdString(store.storeOwner);
+       if (store && store.storeOwner) {
+         const storeOwnerUserId = getUserIdString(store.storeOwner);
 
-        let customerName = "A customer";
-        if (requirement?.createdBy) {
-          const user = requirement.createdBy;
-          customerName =
-            user.firstName && user.lastName
-              ? `${user.firstName} ${user.lastName}`
-              : user.firstName || "A customer";
-        }
+         let customerName = "A customer";
+         if (requirement?.createdBy) {
+           const user = requirement.createdBy;
+           customerName =
+             user.firstName && user.lastName
+               ? `${user.firstName} ${user.lastName}`
+               : user.firstName || "A customer";
+         }
 
-        const notificationMessage = `${customerName} accepted your quotation for "${
-          requirement?.reqTitle || "a requirement"
-        }"`;
+         const notificationMessage = `${customerName} accepted your quotation for "${
+           requirement?.reqTitle || "a requirement"
+         }"`;
 
-        const notificationRecord = new ResponseModel({
-          requirementId: data.requirementId,
-          storeId: data.storeId, // ✅ use the real storeId from the accepted response
-          price: 0,
-          deliveryTime: 0,
-          deliveryTimeUnit: "days",
-          message: notificationMessage,
-          status: "Notification",
-          notificationForStoreOwner: true,
-          notificationTitle: "Quotation Accepted",
-          notificationMessage: notificationMessage,
-          notificationType: "quotation_accepted",
-          isNotificationRead: false,
-          notificationRecipientId: storeOwnerUserId,
-          notificationSenderId: requirement?.createdBy?._id,
-        });
-        await notificationRecord.save();
+         const notificationRecord = new ResponseModel({
+           requirementId: data.requirementId,
+           storeId: data.storeId, // ✅ use the real storeId from the accepted response
+           price: 0,
+           deliveryTime: 0,
+           deliveryTimeUnit: "days",
+           message: notificationMessage,
+           status: "Notification",
+           notificationForStoreOwner: true,
+           notificationTitle: "Quotation Accepted",
+           notificationMessage: notificationMessage,
+           notificationType: "quotation_accepted",
+           isNotificationRead: false,
+           notificationRecipientId: storeOwnerUserId,
+           notificationSenderId: requirement?.createdBy?._id,
+         });
+         await notificationRecord.save();
 
-        const notification = {
-          type: "quotation_accepted",
-          title: "Quotation Accepted",
-          message: notificationMessage,
-          requirementId: data.requirementId,
-          responseId: data._id,
-          notificationId: notificationRecord._id,
-          timestamp: new Date(),
-        };
+         const notification = {
+           type: "quotation_accepted",
+           title: "Quotation Accepted",
+           message: notificationMessage,
+           requirementId: data.requirementId,
+           responseId: data._id,
+           notificationId: notificationRecord._id,
+           timestamp: new Date(),
+         };
 
-        if (storeOwnerUserId) {
-          const socketId = req.app.locals.userSockets?.get(storeOwnerUserId);
-          if (socketId) {
-            io.to(socketId).emit("notification", notification);
-            console.log(
-              "Quotation accepted notification sent to store owner:",
-              storeOwnerUserId
-            );
-          } else {
-            console.log("Store owner not connected via WebSocket:", storeOwnerUserId);
-          }
-        }
-      }
+         if (storeOwnerUserId) {
+           const socketId = req.app.locals.userSockets?.get(storeOwnerUserId);
+           if (socketId) {
+             io.to(socketId).emit("notification", notification);
+             console.log(
+               "Quotation accepted notification sent to store owner:",
+               storeOwnerUserId
+             );
+           } else {
+             console.log("Store owner not connected via WebSocket:", storeOwnerUserId);
+           }
+         }
+
+         // Emit dedicated quotationAccepted event for real-time status update
+         // in the CuratorView of the customer who accepted
+         const quotationAcceptedEvent = {
+           responseId: data._id,
+           requirementId: data.requirementId,
+           storeId: data.storeId,
+           status: "Accepted",
+           timestamp: new Date(),
+         };
+         io.emit("quotationAccepted", quotationAcceptedEvent);
+         console.log("quotationAccepted event emitted for response:", data._id);
+       }
     }
 
     res.json(data);

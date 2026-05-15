@@ -50,23 +50,34 @@ const requirementSchema = new mongoose.Schema({
   city: String,
   deliveryDate: {
     type: Date,
-    validate: {
-      validator: function(v) {
-        return !v || v >= new Date().setHours(0,0,0,0);
+    validate: [
+      {
+        validator: function(v) {
+          return !v || v >= new Date().setHours(0,0,0,0);
+        },
+        message: props => `Delivery date must be today or a future date`
       },
-      message: props => `Delivery date must be today or a future date`
-    }
+      {
+        validator: function(v) {
+          // deliveryDate must be >= deadLineDate
+          if (v && this.deadLineDate && v < this.deadLineDate) {
+            return false;
+          }
+          return true;
+        },
+        message: props => `Expected Delivery Date must be on or after Quotation Deadline`
+      }
+    ]
   },
   reqStatus: {
     type: String,
     enum: ["Open", "In-Review", "Closed"],
     default: "Open"
   },
-  expectedBudget: {
-    type: Number,
-    required: true,
-    min: [0, 'Budget must be a non-negative number']
-  },
+   expectedBudget: {
+     type: Number,
+     required: true
+   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",

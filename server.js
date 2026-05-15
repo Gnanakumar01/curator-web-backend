@@ -20,9 +20,11 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
+const FRONTEND_URL = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://yourdomain.com' : 'http://localhost:5173');
+
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: FRONTEND_URL,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
     allowedHeaders: ["*"]
@@ -79,7 +81,7 @@ app.locals.sendNotification = (userId, notification) => {
 };
 
 app.use(cors({
-  origin: true,
+  origin: FRONTEND_URL,
   credentials: true
 }));
 
